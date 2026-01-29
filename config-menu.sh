@@ -25,16 +25,11 @@ BG_GREEN='\033[42m'
 BG_RED='\033[41m'
 
 # ================================ 配置变量 ================================
-CONFIG_DIR="$HOME/.clawd"
-CONFIG_FILE="$CONFIG_DIR/config.yaml"
-LOG_DIR="$CONFIG_DIR/logs"
-DATA_DIR="$CONFIG_DIR/data"
-SKILLS_DIR="$CONFIG_DIR/skills"
+CONFIG_DIR="$HOME/.clawdbot"
 
-# ClawdBot 实际配置目录
-CLAWDBOT_DIR="$HOME/.clawdbot"
-CLAWDBOT_ENV="$CLAWDBOT_DIR/env"
-CLAWDBOT_JSON="$CLAWDBOT_DIR/clawdbot.json"
+# ClawdBot 环境变量配置
+CLAWDBOT_ENV="$CONFIG_DIR/env"
+CLAWDBOT_JSON="$CONFIG_DIR/clawdbot.json"
 BACKUP_DIR="$CONFIG_DIR/backups"
 
 # ================================ 工具函数 ================================
@@ -115,34 +110,18 @@ check_dependencies() {
 # 备份配置
 backup_config() {
     mkdir -p "$BACKUP_DIR"
-    local backup_file="$BACKUP_DIR/config_$(date +%Y%m%d_%H%M%S).yaml"
-    if [ -f "$CONFIG_FILE" ]; then
-        cp "$CONFIG_FILE" "$backup_file"
+    local backup_file="$BACKUP_DIR/env_$(date +%Y%m%d_%H%M%S).bak"
+    if [ -f "$CLAWDBOT_ENV" ]; then
+        cp "$CLAWDBOT_ENV" "$backup_file"
         echo "$backup_file"
     fi
 }
 
-# 读取配置值
-get_config_value() {
+# 从环境变量文件读取配置
+get_env_value() {
     local key=$1
-    if [ -f "$CONFIG_FILE" ]; then
-        grep -E "^[[:space:]]*$key:" "$CONFIG_FILE" | head -1 | sed 's/.*:[[:space:]]*//' | tr -d '"' | tr -d "'"
-    fi
-}
-
-# 更新配置值
-update_config_value() {
-    local key=$1
-    local value=$2
-    local file=$CONFIG_FILE
-    
-    if grep -q "^[[:space:]]*$key:" "$file"; then
-        # macOS 和 Linux 兼容的 sed
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s|^\([[:space:]]*$key:\).*|\1 \"$value\"|" "$file"
-        else
-            sed -i "s|^\([[:space:]]*$key:\).*|\1 \"$value\"|" "$file"
-        fi
+    if [ -f "$CLAWDBOT_ENV" ]; then
+        grep "^export $key=" "$CLAWDBOT_ENV" 2>/dev/null | sed 's/.*=//' | tr -d '"'
     fi
 }
 
@@ -612,32 +591,36 @@ show_status() {
     
     echo ""
     
-    # 配置文件状态
-    if [ -f "$CONFIG_FILE" ]; then
-        echo -e "  ${GREEN}✓${NC} 配置文件: $CONFIG_FILE"
-        
-        # 显示当前配置概要
-        local provider=$(get_config_value "provider")
-        local model=$(get_config_value "model")
-        local bot_name=$(get_config_value "bot_name")
-        
+    # 当前配置
+    if [ -f "$CLAWDBOT_ENV" ]; then
         echo ""
         echo -e "  ${CYAN}当前配置:${NC}"
-        echo -e "    • AI 提供商: ${WHITE}${provider:-未配置}${NC}"
-        echo -e "    • 模型: ${WHITE}${model:-未配置}${NC}"
-        echo -e "    • 助手名称: ${WHITE}${bot_name:-未配置}${NC}"
+        
+        # 显示 ClawdBot 模型配置
+        if check_clawdbot_installed; then
+            local default_model=$(clawdbot config get models.default 2>/dev/null || echo "未配置")
+            echo -e "    • 默认模型: ${WHITE}$default_model${NC}"
+        fi
+        
+        # 检查 API Key 配置
+        if grep -q "ANTHROPIC_API_KEY" "$CLAWDBOT_ENV" 2>/dev/null; then
+            echo -e "    • AI 提供商: ${WHITE}Anthropic${NC}"
+        elif grep -q "OPENAI_API_KEY" "$CLAWDBOT_ENV" 2>/dev/null; then
+            echo -e "    • AI 提供商: ${WHITE}OpenAI${NC}"
+        elif grep -q "GOOGLE_API_KEY" "$CLAWDBOT_ENV" 2>/dev/null; then
+            echo -e "    • AI 提供商: ${WHITE}Google${NC}"
+        fi
     else
-        echo -e "  ${YELLOW}⚠${NC} 配置文件不存在"
+        echo -e "  ${YELLOW}⚠${NC} 环境变量未配置"
     fi
     
     echo ""
     
     # 目录状态
     echo -e "  ${CYAN}目录结构:${NC}"
-    [ -d "$CONFIG_DIR" ] && echo -e "    ${GREEN}✓${NC} 配置目录" || echo -e "    ${RED}✗${NC} 配置目录"
-    [ -d "$LOG_DIR" ] && echo -e "    ${GREEN}✓${NC} 日志目录" || echo -e "    ${RED}✗${NC} 日志目录"
-    [ -d "$SKILLS_DIR" ] && echo -e "    ${GREEN}✓${NC} 技能目录" || echo -e "    ${RED}✗${NC} 技能目录"
-    [ -d "$DATA_DIR" ] && echo -e "    ${GREEN}✓${NC} 数据目录" || echo -e "    ${RED}✗${NC} 数据目录"
+    [ -d "$CONFIG_DIR" ] && echo -e "    ${GREEN}✓${NC} 配置目录: $CONFIG_DIR" || echo -e "    ${RED}✗${NC} 配置目录"
+    [ -f "$CLAWDBOT_ENV" ] && echo -e "    ${GREEN}✓${NC} 环境变量: $CLAWDBOT_ENV" || echo -e "    ${RED}✗${NC} 环境变量"
+    [ -f "$CLAWDBOT_JSON" ] && echo -e "    ${GREEN}✓${NC} ClawdBot 配置: $CLAWDBOT_JSON" || echo -e "    ${YELLOW}⚠${NC} ClawdBot 配置"
     
     echo ""
     print_divider
@@ -655,31 +638,30 @@ config_ai_model() {
     echo ""
     
     echo -e "${CYAN}选择 AI 提供商:${NC}"
+    echo -e "${GRAY}提示: 所有提供商都支持自定义 API 地址，可接入代理服务${NC}"
     echo ""
-    print_menu_item "1" "Anthropic Claude (推荐)" "🟣"
+    print_menu_item "1" "Anthropic Claude" "🟣"
     print_menu_item "2" "OpenAI GPT" "🟢"
-    print_menu_item "3" "OpenAI Compatible (通用兼容接口)" "🔄"
-    print_menu_item "4" "Ollama 本地模型" "🟠"
-    print_menu_item "5" "OpenRouter (多模型网关)" "🔵"
-    print_menu_item "6" "Google Gemini" "🔴"
-    print_menu_item "7" "Azure OpenAI" "☁️"
-    print_menu_item "8" "Groq (超快推理)" "⚡"
-    print_menu_item "9" "Mistral AI" "🌬️"
+    print_menu_item "3" "Ollama 本地模型" "🟠"
+    print_menu_item "4" "OpenRouter (多模型网关)" "🔵"
+    print_menu_item "5" "Google Gemini" "🔴"
+    print_menu_item "6" "Azure OpenAI" "☁️"
+    print_menu_item "7" "Groq (超快推理)" "⚡"
+    print_menu_item "8" "Mistral AI" "🌬️"
     print_menu_item "0" "返回主菜单" "↩️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [0-9]: ${NC}")" choice
+    read -p "$(echo -e "${YELLOW}请选择 [0-8]: ${NC}")" choice
     
     case $choice in
         1) config_anthropic ;;
         2) config_openai ;;
-        3) config_openai_compatible ;;
-        4) config_ollama ;;
-        5) config_openrouter ;;
-        6) config_google_gemini ;;
-        7) config_azure_openai ;;
-        8) config_groq ;;
-        9) config_mistral ;;
+        3) config_ollama ;;
+        4) config_openrouter ;;
+        5) config_google_gemini ;;
+        6) config_azure_openai ;;
+        7) config_groq ;;
+        8) config_mistral ;;
         0) return ;;
         *) log_error "无效选择"; press_enter; config_ai_model ;;
     esac
@@ -693,6 +675,9 @@ config_anthropic() {
     print_divider
     echo ""
     
+    echo -e "${GRAY}官方 API: https://console.anthropic.com/${NC}"
+    echo ""
+    
     # 获取当前 API Key
     local current_key=$(get_config_value "api_key")
     if [ -n "$current_key" ] && [ "$current_key" != "your-api-key-here" ]; then
@@ -701,27 +686,32 @@ config_anthropic() {
     fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 Claude API Key (留空保持不变): ${NC}")" api_key
+    read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" api_key
     
-    # 如果没有输入新的 key，使用当前的
+    # 如果没有输入新的 key，尝试从现有配置读取
     if [ -z "$api_key" ]; then
-        api_key="$current_key"
-    else
-        backup_config
-        update_config_value "provider" "anthropic"
-        update_config_value "api_key" "$api_key"
+        api_key=$(get_env_value "ANTHROPIC_API_KEY")
+        if [ -z "$api_key" ]; then
+            log_error "API Key 不能为空"
+            press_enter
+            return
+        fi
     fi
+    
+    echo ""
+    read -p "$(echo -e "${YELLOW}自定义 API 地址 (留空使用官方): ${NC}")" base_url
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
     echo ""
-    print_menu_item "1" "Claude Sonnet 4 (平衡性能，推荐)" "⭐"
-    print_menu_item "2" "Claude Opus 4 (最强性能)" "👑"
-    print_menu_item "3" "Claude 3.5 Haiku (快速经济)" "⚡"
+    print_menu_item "1" "Claude Sonnet 4 (推荐)" "⭐"
+    print_menu_item "2" "Claude Opus 4 (最强)" "👑"
+    print_menu_item "3" "Claude 3.5 Haiku (快速)" "⚡"
     print_menu_item "4" "Claude 3.5 Sonnet (上一代)" "📦"
+    print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -729,23 +719,22 @@ config_anthropic() {
         2) model="claude-opus-4-20250514" ;;
         3) model="claude-3-5-haiku-20241022" ;;
         4) model="claude-3-5-sonnet-20241022" ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
         *) model="claude-sonnet-4-20250514" ;;
     esac
     
-    update_config_value "model" "$model"
-    
     # 保存到 ClawdBot 环境变量配置
-    save_clawdbot_ai_config "anthropic" "$api_key" "$model" ""
+    save_clawdbot_ai_config "anthropic" "$api_key" "$model" "$base_url"
     
     echo ""
     log_info "Anthropic Claude 配置完成！"
-    log_info "提供商: anthropic"
     log_info "模型: $model"
+    [ -n "$base_url" ] && log_info "API 地址: $base_url"
     
     # 询问是否测试
     echo ""
     if confirm "是否测试 API 连接？" "y"; then
-        test_ai_connection "anthropic" "$api_key" "$model" ""
+        test_ai_connection "anthropic" "$api_key" "$model" "$base_url"
     fi
     
     press_enter
@@ -759,7 +748,10 @@ config_openai() {
     print_divider
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 OpenAI API Key: ${NC}")" api_key
+    echo -e "${GRAY}官方 API: https://platform.openai.com/${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
     
     if [ -n "$api_key" ]; then
         backup_config
@@ -768,15 +760,19 @@ config_openai() {
     fi
     
     echo ""
+    read -p "$(echo -e "${YELLOW}自定义 API 地址 (留空使用官方): ${NC}")" base_url
+    
+    echo ""
     echo -e "${CYAN}选择模型:${NC}"
     echo ""
     print_menu_item "1" "GPT-4o (推荐)" "⭐"
     print_menu_item "2" "GPT-4o-mini (经济)" "⚡"
     print_menu_item "3" "GPT-4 Turbo" "🚀"
     print_menu_item "4" "o1-preview (推理)" "🧠"
+    print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -784,22 +780,25 @@ config_openai() {
         2) model="gpt-4o-mini" ;;
         3) model="gpt-4-turbo" ;;
         4) model="o1-preview" ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
         *) model="gpt-4o" ;;
     esac
     
     update_config_value "model" "$model"
+    [ -n "$base_url" ] && update_config_value "base_url" "$base_url"
     
     # 保存到 ClawdBot 环境变量配置
-    save_clawdbot_ai_config "openai" "$api_key" "$model" ""
+    save_clawdbot_ai_config "openai" "$api_key" "$model" "$base_url"
     
     echo ""
     log_info "OpenAI GPT 配置完成！"
     log_info "模型: $model"
+    [ -n "$base_url" ] && log_info "API 地址: $base_url"
     
     # 询问是否测试
     echo ""
     if confirm "是否测试 API 连接？" "y"; then
-        test_ai_connection "openai" "$api_key" "$model" ""
+        test_ai_connection "openai" "$api_key" "$model" "$base_url"
     fi
     
     press_enter
@@ -875,25 +874,30 @@ config_openrouter() {
     echo ""
     
     echo -e "${CYAN}OpenRouter 是一个多模型网关，支持多种 AI 模型${NC}"
+    echo -e "${GRAY}获取 API Key: https://openrouter.ai/${NC}"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 OpenRouter API Key: ${NC}")" api_key
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
     
     if [ -n "$api_key" ]; then
         backup_config
         update_config_value "provider" "openrouter"
         update_config_value "api_key" "$api_key"
-        update_config_value "base_url" "https://openrouter.ai/api/v1"
     fi
+    
+    echo ""
+    read -p "$(echo -e "${YELLOW}自定义 API 地址 (留空使用官方): ${NC}")" base_url
+    base_url=${base_url:-"https://openrouter.ai/api/v1"}
+    update_config_value "base_url" "$base_url"
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
     echo ""
-    print_menu_item "1" "anthropic/claude-sonnet-4" "🟣"
+    print_menu_item "1" "anthropic/claude-sonnet-4 (推荐)" "🟣"
     print_menu_item "2" "openai/gpt-4o" "🟢"
     print_menu_item "3" "google/gemini-pro-1.5" "🔴"
     print_menu_item "4" "meta-llama/llama-3-70b" "🦙"
-    print_menu_item "5" "自定义模型" "✏️"
+    print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
     read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
@@ -904,106 +908,24 @@ config_openrouter() {
         2) model="openai/gpt-4o" ;;
         3) model="google/gemini-pro-1.5" ;;
         4) model="meta-llama/llama-3-70b-instruct" ;;
-        5) 
-            read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model
-            ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
         *) model="anthropic/claude-sonnet-4" ;;
     esac
     
     update_config_value "model" "$model"
     
     # 保存到 ClawdBot 环境变量配置
-    save_clawdbot_ai_config "openrouter" "$api_key" "$model" ""
+    save_clawdbot_ai_config "openrouter" "$api_key" "$model" "$base_url"
     
     echo ""
     log_info "OpenRouter 配置完成！"
     log_info "模型: $model"
-    
-    # 询问是否测试
-    echo ""
-    if confirm "是否测试 API 连接？" "y"; then
-        test_ai_connection "openrouter" "$api_key" "$model" "https://openrouter.ai/api/v1"
-    fi
-    
-    press_enter
-}
-
-config_openai_compatible() {
-    clear_screen
-    print_header
-    
-    echo -e "${WHITE}🔄 配置 OpenAI Compatible (通用兼容接口)${NC}"
-    print_divider
-    echo ""
-    
-    echo -e "${CYAN}OpenAI Compatible 支持任何兼容 OpenAI API 格式的服务${NC}"
-    echo -e "${CYAN}包括: OneAPI, New API, 各种代理服务等${NC}"
-    echo ""
-    
-    read -p "$(echo -e "${YELLOW}输入 API 地址 (如 https://api.example.com/v1): ${NC}")" base_url
-    
-    if [ -z "$base_url" ]; then
-        log_error "API 地址不能为空"
-        press_enter
-        return
-    fi
-    
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
-    
-    if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
-        press_enter
-        return
-    fi
-    
-    echo ""
-    echo -e "${CYAN}选择或输入模型:${NC}"
-    echo ""
-    print_menu_item "1" "claude-sonnet-4.5" "🟣"
-    print_menu_item "2" "claude-sonnet-4" "🟣"
-    print_menu_item "3" "claude-opus-4" "🟣"
-    print_menu_item "4" "gpt-4o" "🟢"
-    print_menu_item "5" "gpt-4o-mini" "🟢"
-    print_menu_item "6" "gpt-4-turbo" "🟢"
-    print_menu_item "7" "gemini-pro" "🔴"
-    print_menu_item "8" "自定义模型名称" "✏️"
-    echo ""
-    
-    read -p "$(echo -e "${YELLOW}请选择 [1-8] (默认: 1): ${NC}")" model_choice
-    model_choice=${model_choice:-1}
-    
-    case $model_choice in
-        1) model="claude-sonnet-4.5" ;;
-        2) model="claude-sonnet-4" ;;
-        3) model="claude-opus-4" ;;
-        4) model="gpt-4o" ;;
-        5) model="gpt-4o-mini" ;;
-        6) model="gpt-4-turbo" ;;
-        7) model="gemini-pro" ;;
-        8) 
-            read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model
-            ;;
-        *) model="claude-sonnet-4.5" ;;
-    esac
-    
-    backup_config
-    update_config_value "provider" "openai-compatible"
-    update_config_value "base_url" "$base_url"
-    update_config_value "api_key" "$api_key"
-    update_config_value "model" "$model"
-    
-    # 保存到 ClawdBot 环境变量配置
-    save_clawdbot_ai_config "openai-compatible" "$api_key" "$model" "$base_url"
-    
-    echo ""
-    log_info "OpenAI Compatible 配置完成！"
     log_info "API 地址: $base_url"
-    log_info "模型: $model"
     
     # 询问是否测试
     echo ""
     if confirm "是否测试 API 连接？" "y"; then
-        test_ai_connection "openai-compatible" "$api_key" "$model" "$base_url"
+        test_ai_connection "openrouter" "$api_key" "$model" "$base_url"
     fi
     
     press_enter
@@ -1017,10 +939,10 @@ config_google_gemini() {
     print_divider
     echo ""
     
-    echo -e "${CYAN}获取 API Key: https://makersuite.google.com/app/apikey${NC}"
+    echo -e "${GRAY}获取 API Key: https://makersuite.google.com/app/apikey${NC}"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 Google API Key: ${NC}")" api_key
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
     
     if [ -n "$api_key" ]; then
         backup_config
@@ -1029,12 +951,15 @@ config_google_gemini() {
     fi
     
     echo ""
+    read -p "$(echo -e "${YELLOW}自定义 API 地址 (留空使用官方): ${NC}")" base_url
+    
+    echo ""
     echo -e "${CYAN}选择模型:${NC}"
     echo ""
     print_menu_item "1" "gemini-2.0-flash (推荐)" "⭐"
     print_menu_item "2" "gemini-1.5-pro" "🚀"
     print_menu_item "3" "gemini-1.5-flash" "⚡"
-    print_menu_item "4" "gemini-1.0-pro" "📦"
+    print_menu_item "4" "自定义模型名称" "✏️"
     echo ""
     
     read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice
@@ -1044,23 +969,25 @@ config_google_gemini() {
         1) model="gemini-2.0-flash" ;;
         2) model="gemini-1.5-pro" ;;
         3) model="gemini-1.5-flash" ;;
-        4) model="gemini-1.0-pro" ;;
+        4) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
         *) model="gemini-2.0-flash" ;;
     esac
     
     update_config_value "model" "$model"
+    [ -n "$base_url" ] && update_config_value "base_url" "$base_url"
     
     # 保存到 ClawdBot 环境变量配置
-    save_clawdbot_ai_config "google" "$api_key" "$model" ""
+    save_clawdbot_ai_config "google" "$api_key" "$model" "$base_url"
     
     echo ""
     log_info "Google Gemini 配置完成！"
     log_info "模型: $model"
+    [ -n "$base_url" ] && log_info "API 地址: $base_url"
     
     # 询问是否测试
     echo ""
     if confirm "是否测试 API 连接？" "y"; then
-        test_ai_connection "google" "$api_key" "$model" ""
+        test_ai_connection "google" "$api_key" "$model" "$base_url"
     fi
     
     press_enter
@@ -1114,26 +1041,30 @@ config_groq() {
     echo ""
     
     echo -e "${CYAN}Groq 提供超快的推理速度${NC}"
-    echo -e "${CYAN}获取 API Key: https://console.groq.com/${NC}"
+    echo -e "${GRAY}获取 API Key: https://console.groq.com/${NC}"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 Groq API Key: ${NC}")" api_key
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
     
     if [ -n "$api_key" ]; then
         backup_config
         update_config_value "provider" "groq"
         update_config_value "api_key" "$api_key"
-        update_config_value "base_url" "https://api.groq.com/openai/v1"
     fi
+    
+    echo ""
+    read -p "$(echo -e "${YELLOW}自定义 API 地址 (留空使用官方): ${NC}")" base_url
+    base_url=${base_url:-"https://api.groq.com/openai/v1"}
+    update_config_value "base_url" "$base_url"
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
     echo ""
     print_menu_item "1" "llama-3.3-70b-versatile (推荐)" "⭐"
-    print_menu_item "2" "llama-3.1-70b-versatile" "🦙"
-    print_menu_item "3" "llama-3.1-8b-instant" "⚡"
-    print_menu_item "4" "mixtral-8x7b-32768" "🌬️"
-    print_menu_item "5" "gemma2-9b-it" "💎"
+    print_menu_item "2" "llama-3.1-8b-instant" "⚡"
+    print_menu_item "3" "mixtral-8x7b-32768" "🌬️"
+    print_menu_item "4" "gemma2-9b-it" "💎"
+    print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
     read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
@@ -1141,26 +1072,27 @@ config_groq() {
     
     case $model_choice in
         1) model="llama-3.3-70b-versatile" ;;
-        2) model="llama-3.1-70b-versatile" ;;
-        3) model="llama-3.1-8b-instant" ;;
-        4) model="mixtral-8x7b-32768" ;;
-        5) model="gemma2-9b-it" ;;
+        2) model="llama-3.1-8b-instant" ;;
+        3) model="mixtral-8x7b-32768" ;;
+        4) model="gemma2-9b-it" ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
         *) model="llama-3.3-70b-versatile" ;;
     esac
     
     update_config_value "model" "$model"
     
     # 保存到 ClawdBot 环境变量配置
-    save_clawdbot_ai_config "groq" "$api_key" "$model" ""
+    save_clawdbot_ai_config "groq" "$api_key" "$model" "$base_url"
     
     echo ""
     log_info "Groq 配置完成！"
     log_info "模型: $model"
+    log_info "API 地址: $base_url"
     
     # 询问是否测试
     echo ""
     if confirm "是否测试 API 连接？" "y"; then
-        test_ai_connection "groq" "$api_key" "$model" "https://api.groq.com/openai/v1"
+        test_ai_connection "groq" "$api_key" "$model" "$base_url"
     fi
     
     press_enter
@@ -1174,53 +1106,56 @@ config_mistral() {
     print_divider
     echo ""
     
-    echo -e "${CYAN}获取 API Key: https://console.mistral.ai/${NC}"
+    echo -e "${GRAY}获取 API Key: https://console.mistral.ai/${NC}"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 Mistral API Key: ${NC}")" api_key
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
     
     if [ -n "$api_key" ]; then
         backup_config
         update_config_value "provider" "mistral"
         update_config_value "api_key" "$api_key"
-        update_config_value "base_url" "https://api.mistral.ai/v1"
     fi
+    
+    echo ""
+    read -p "$(echo -e "${YELLOW}自定义 API 地址 (留空使用官方): ${NC}")" base_url
+    base_url=${base_url:-"https://api.mistral.ai/v1"}
+    update_config_value "base_url" "$base_url"
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
     echo ""
     print_menu_item "1" "mistral-large-latest (推荐)" "⭐"
-    print_menu_item "2" "mistral-medium-latest" "🚀"
-    print_menu_item "3" "mistral-small-latest" "⚡"
-    print_menu_item "4" "open-mixtral-8x22b" "🌬️"
-    print_menu_item "5" "codestral-latest" "💻"
+    print_menu_item "2" "mistral-small-latest" "⚡"
+    print_menu_item "3" "codestral-latest" "💻"
+    print_menu_item "4" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice
     model_choice=${model_choice:-1}
     
     case $model_choice in
         1) model="mistral-large-latest" ;;
-        2) model="mistral-medium-latest" ;;
-        3) model="mistral-small-latest" ;;
-        4) model="open-mixtral-8x22b" ;;
-        5) model="codestral-latest" ;;
+        2) model="mistral-small-latest" ;;
+        3) model="codestral-latest" ;;
+        4) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
         *) model="mistral-large-latest" ;;
     esac
     
     update_config_value "model" "$model"
     
     # 保存到 ClawdBot 环境变量配置
-    save_clawdbot_ai_config "mistral" "$api_key" "$model" ""
+    save_clawdbot_ai_config "mistral" "$api_key" "$model" "$base_url"
     
     echo ""
     log_info "Mistral AI 配置完成！"
     log_info "模型: $model"
+    log_info "API 地址: $base_url"
     
     # 询问是否测试
     echo ""
     if confirm "是否测试 API 连接？" "y"; then
-        test_ai_connection "mistral" "$api_key" "$model" "https://api.mistral.ai/v1"
+        test_ai_connection "mistral" "$api_key" "$model" "$base_url"
     fi
     
     press_enter
@@ -1940,7 +1875,7 @@ manage_service() {
             if command -v clawdbot &> /dev/null; then
                 echo -e "${CYAN}按 Ctrl+C 退出日志查看${NC}"
                 sleep 1
-                clawdbot logs -f
+                clawdbot logs --follow
             else
                 log_error "ClawdBot 未安装"
             fi
@@ -2016,32 +1951,31 @@ EOF
     # 根据 provider 设置对应的环境变量
     case "$provider" in
         anthropic)
-            echo "ANTHROPIC_API_KEY=\"$api_key\"" >> "$env_file"
+            echo "export ANTHROPIC_API_KEY=$api_key" >> "$env_file"
+            [ -n "$base_url" ] && echo "export ANTHROPIC_BASE_URL=$base_url" >> "$env_file"
             ;;
         openai)
-            echo "OPENAI_API_KEY=\"$api_key\"" >> "$env_file"
-            ;;
-        openai-compatible)
-            echo "OPENAI_API_KEY=\"$api_key\"" >> "$env_file"
-            [ -n "$base_url" ] && echo "OPENAI_BASE_URL=\"$base_url\"" >> "$env_file"
+            echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
+            [ -n "$base_url" ] && echo "export OPENAI_BASE_URL=$base_url" >> "$env_file"
             ;;
         google)
-            echo "GOOGLE_API_KEY=\"$api_key\"" >> "$env_file"
+            echo "export GOOGLE_API_KEY=$api_key" >> "$env_file"
+            [ -n "$base_url" ] && echo "export GOOGLE_BASE_URL=$base_url" >> "$env_file"
             ;;
         groq)
-            echo "OPENAI_API_KEY=\"$api_key\"" >> "$env_file"
-            echo "OPENAI_BASE_URL=\"https://api.groq.com/openai/v1\"" >> "$env_file"
+            echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
+            echo "export OPENAI_BASE_URL=${base_url:-https://api.groq.com/openai/v1}" >> "$env_file"
             ;;
         mistral)
-            echo "OPENAI_API_KEY=\"$api_key\"" >> "$env_file"
-            echo "OPENAI_BASE_URL=\"https://api.mistral.ai/v1\"" >> "$env_file"
+            echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
+            echo "export OPENAI_BASE_URL=${base_url:-https://api.mistral.ai/v1}" >> "$env_file"
             ;;
         openrouter)
-            echo "OPENAI_API_KEY=\"$api_key\"" >> "$env_file"
-            echo "OPENAI_BASE_URL=\"https://openrouter.ai/api/v1\"" >> "$env_file"
+            echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
+            echo "export OPENAI_BASE_URL=${base_url:-https://openrouter.ai/api/v1}" >> "$env_file"
             ;;
         ollama)
-            echo "OLLAMA_HOST=\"${base_url:-http://localhost:11434}\"" >> "$env_file"
+            echo "export OLLAMA_HOST=${base_url:-http://localhost:11434}" >> "$env_file"
             ;;
     esac
     
@@ -2054,8 +1988,12 @@ EOF
             anthropic)
                 clawdbot_model="anthropic/$model"
                 ;;
-            openai|openai-compatible|groq|mistral|openrouter)
+            openai|groq|mistral)
                 clawdbot_model="openai/$model"
+                ;;
+            openrouter)
+                # OpenRouter 模型名已包含 provider 前缀
+                clawdbot_model="openrouter/$model"
                 ;;
             google)
                 clawdbot_model="google/$model"
@@ -2102,31 +2040,34 @@ advanced_settings() {
     print_divider
     echo ""
     
-    print_menu_item "1" "编辑配置文件" "📝"
+    print_menu_item "1" "编辑环境变量" "📝"
     print_menu_item "2" "备份配置" "💾"
     print_menu_item "3" "恢复配置" "📥"
     print_menu_item "4" "重置配置" "🔄"
-    print_menu_item "5" "管理技能 (Skills)" "🎯"
-    print_menu_item "6" "清理日志" "🧹"
-    print_menu_item "7" "更新 ClawdBot" "⬆️"
-    print_menu_item "8" "卸载 ClawdBot" "🗑️"
+    print_menu_item "5" "清理日志" "🧹"
+    print_menu_item "6" "更新 ClawdBot" "⬆️"
+    print_menu_item "7" "卸载 ClawdBot" "🗑️"
     print_menu_item "0" "返回主菜单" "↩️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [0-8]: ${NC}")" choice
+    read -p "$(echo -e "${YELLOW}请选择 [0-7]: ${NC}")" choice
     
     case $choice in
         1)
             echo ""
-            log_info "正在打开配置文件..."
-            if [ -n "$EDITOR" ]; then
-                $EDITOR "$CONFIG_FILE"
-            elif command -v nano &> /dev/null; then
-                nano "$CONFIG_FILE"
-            elif command -v vim &> /dev/null; then
-                vim "$CONFIG_FILE"
+            log_info "正在打开环境变量配置..."
+            if [ -f "$CLAWDBOT_ENV" ]; then
+                if [ -n "$EDITOR" ]; then
+                    $EDITOR "$CLAWDBOT_ENV"
+                elif command -v nano &> /dev/null; then
+                    nano "$CLAWDBOT_ENV"
+                elif command -v vim &> /dev/null; then
+                    vim "$CLAWDBOT_ENV"
+                else
+                    cat "$CLAWDBOT_ENV"
+                fi
             else
-                log_error "未找到文本编辑器"
+                log_error "环境变量文件不存在: $CLAWDBOT_ENV"
             fi
             ;;
         2)
@@ -2144,26 +2085,26 @@ advanced_settings() {
         4)
             if confirm "确定要重置所有配置吗？这将删除当前配置" "n"; then
                 backup_config
-                rm -f "$CONFIG_FILE"
+                rm -f "$CONFIG_FILE" "$CLAWDBOT_ENV"
                 log_info "配置已重置，请重新运行安装脚本"
             fi
             ;;
         5)
-            manage_skills
-            ;;
-        6)
-            if confirm "确定要清理所有日志吗？" "n"; then
-                rm -rf "$LOG_DIR"/*
+            if confirm "确定要清理日志吗？" "n"; then
+                if command -v clawdbot &> /dev/null; then
+                    clawdbot logs clear 2>/dev/null || log_warn "ClawdBot 日志清理命令不可用"
+                fi
+                rm -f /tmp/clawdbot-gateway.log 2>/dev/null
                 log_info "日志已清理"
             fi
             ;;
-        7)
+        6)
             echo ""
             log_info "正在更新 ClawdBot..."
             npm update -g clawdbot
             log_info "更新完成"
             ;;
-        8)
+        7)
             if confirm "确定要卸载 ClawdBot 吗？" "n"; then
                 npm uninstall -g clawdbot
                 if confirm "是否同时删除配置文件？" "n"; then
@@ -2219,115 +2160,6 @@ restore_config() {
         log_info "配置已从备份恢复"
     else
         log_error "无效选择"
-    fi
-}
-
-manage_skills() {
-    clear_screen
-    print_header
-    
-    echo -e "${WHITE}🎯 技能管理${NC}"
-    print_divider
-    echo ""
-    
-    echo -e "${CYAN}技能目录: $SKILLS_DIR${NC}"
-    echo ""
-    
-    if [ -d "$SKILLS_DIR" ]; then
-        echo -e "${CYAN}已安装技能:${NC}"
-        for file in "$SKILLS_DIR"/*.md; do
-            if [ -f "$file" ]; then
-                local name=$(basename "$file" .md)
-                echo "  • $name"
-            fi
-        done
-    fi
-    
-    echo ""
-    print_menu_item "1" "创建新技能" "➕"
-    print_menu_item "2" "编辑技能" "✏️"
-    print_menu_item "3" "删除技能" "🗑️"
-    print_menu_item "4" "打开技能目录" "📂"
-    print_menu_item "0" "返回" "↩️"
-    echo ""
-    
-    read -p "$(echo -e "${YELLOW}请选择 [0-4]: ${NC}")" choice
-    
-    case $choice in
-        1)
-            read -p "$(echo -e "${YELLOW}技能名称: ${NC}")" skill_name
-            if [ -n "$skill_name" ]; then
-                create_skill_template "$skill_name"
-            fi
-            ;;
-        2)
-            read -p "$(echo -e "${YELLOW}技能名称: ${NC}")" skill_name
-            if [ -f "$SKILLS_DIR/$skill_name.md" ]; then
-                ${EDITOR:-nano} "$SKILLS_DIR/$skill_name.md"
-            else
-                log_error "技能不存在"
-            fi
-            ;;
-        3)
-            read -p "$(echo -e "${YELLOW}技能名称: ${NC}")" skill_name
-            if [ -f "$SKILLS_DIR/$skill_name.md" ]; then
-                if confirm "确定删除技能 $skill_name？"; then
-                    rm "$SKILLS_DIR/$skill_name.md"
-                    log_info "技能已删除"
-                fi
-            else
-                log_error "技能不存在"
-            fi
-            ;;
-        4)
-            if command -v open &> /dev/null; then
-                open "$SKILLS_DIR"
-            elif command -v xdg-open &> /dev/null; then
-                xdg-open "$SKILLS_DIR"
-            fi
-            ;;
-        0)
-            return
-            ;;
-    esac
-    
-    press_enter
-    manage_skills
-}
-
-create_skill_template() {
-    local name=$1
-    local file="$SKILLS_DIR/$name.md"
-    
-    cat > "$file" << EOF
-# $name
-
-## 描述
-在这里描述技能的用途。
-
-## 触发条件
-- 用户说 "关键词"
-- 或定时触发
-
-## 执行步骤
-1. 步骤一
-2. 步骤二
-3. 步骤三
-
-## 输出格式
-\`\`\`
-预期的输出格式模板
-\`\`\`
-
-## 示例
-输入: "示例输入"
-输出: "示例输出"
-EOF
-
-    log_info "技能模板已创建: $file"
-    
-    if confirm "是否立即编辑？"; then
-        ${EDITOR:-nano} "$file"
     fi
 }
 
@@ -2748,9 +2580,6 @@ main() {
     
     # 确保配置目录存在
     mkdir -p "$CONFIG_DIR"
-    mkdir -p "$LOG_DIR"
-    mkdir -p "$DATA_DIR"
-    mkdir -p "$SKILLS_DIR"
     mkdir -p "$BACKUP_DIR"
     
     # 主循环

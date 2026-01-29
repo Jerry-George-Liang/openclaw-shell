@@ -116,7 +116,7 @@ chmod +x install.sh config-menu.sh
 
 ```bash
 # 运行配置菜单进行详细配置
-bash ~/.clawd/config-menu.sh
+bash ~/.clawdbot/config-menu.sh
 
 # 或从 GitHub 下载运行
 curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/config-menu.sh | bash
@@ -240,7 +240,7 @@ clawdbot gateway
 clawdbot logs
 
 # 实时日志
-clawdbot logs -f
+clawdbot logs --follow
 ```
 
 ### 配置管理
@@ -274,7 +274,7 @@ clawdbot backup
 
 ## 📋 配置说明
 
-配置文件位置：`~/.clawd/config.yaml`
+配置文件位置：`~/.clawdbot/config.yaml`
 
 ### 完整配置示例
 
@@ -323,13 +323,13 @@ channels:
 # 记忆系统
 memory:
   enabled: true
-  storage_path: "~/.clawd/data/memory"
+  storage_path: "~/.clawdbot/data/memory"
   max_context_length: 32000
 
 # Skills 技能
 skills:
   enabled: true
-  path: "~/.clawd/skills"
+  path: "~/.clawdbot/skills"
 
 # 安全配置
 security:
@@ -341,7 +341,7 @@ security:
 # 日志配置
 logging:
   level: "info"                 # 日志级别: debug/info/warn/error
-  path: "~/.clawd/logs"
+  path: "~/.clawdbot/logs"
   max_size: "10MB"
   max_files: 5
 ```
@@ -349,7 +349,7 @@ logging:
 ### 目录结构
 
 ```
-~/.clawd/
+~/.clawdbot/
 ├── config.yaml          # 主配置文件
 ├── data/
 │   ├── memory/          # 记忆存储
@@ -449,7 +449,7 @@ npm update -g clawdbot
 
 ```bash
 # 手动备份
-cp -r ~/.clawd ~/clawd_backup_$(date +%Y%m%d)
+cp -r ~/.clawdbot ~/clawdbot_backup_$(date +%Y%m%d)
 
 # 使用命令备份
 clawdbot backup
@@ -465,7 +465,7 @@ clawdbot gateway stop
 npm uninstall -g clawdbot
 
 # 删除配置（可选）
-rm -rf ~/.clawd
+rm -rf ~/.clawdbot
 ```
 
 ## 📜 更新日志

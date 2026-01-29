@@ -1,6 +1,6 @@
 # ============================================================
 # ClawdBot 配置文件示例
-# 复制此文件到 ~/.clawd/config.yaml 并修改相关配置
+# 复制此文件到 ~/.clawdbot/config.yaml 并修改相关配置
 # 详细文档: https://clawd.bot/docs/config
 # ============================================================
 
@@ -212,7 +212,7 @@ memory:
   enabled: true
   
   # 记忆存储路径
-  storage_path: "~/.clawd/data/memory"
+  storage_path: "~/.clawdbot/data/memory"
   
   # 最大上下文长度（token）
   max_context_length: 32000
@@ -233,7 +233,7 @@ skills:
   enabled: true
   
   # 技能文件目录
-  path: "~/.clawd/skills"
+  path: "~/.clawdbot/skills"
   
   # 内置技能开关
   builtin:
@@ -268,7 +268,7 @@ security:
   
   # 文件访问白名单（仅当 enable_file_access 为 true 时生效）
   file_whitelist:
-    - "~/.clawd/"
+    - "~/.clawdbot/"
     - "~/Documents/"
   
   # 敏感信息过滤
@@ -311,7 +311,7 @@ logging:
   level: "info"
   
   # 日志文件路径
-  path: "~/.clawd/logs"
+  path: "~/.clawdbot/logs"
   
   # 单个日志文件最大大小
   max_size: "10MB"

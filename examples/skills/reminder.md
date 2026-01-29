@@ -93,7 +93,7 @@ skills:
     max_reminders: 100        # 最大提醒数量
     default_advance: 15       # 默认提前提醒（分钟）
     persist: true             # 重启后保留提醒
-    storage: "~/.clawd/data/reminders.json"
+    storage: "~/.clawdbot/data/reminders.json"
     channels:
       - telegram
       - discord

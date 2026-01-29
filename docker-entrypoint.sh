@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-CONFIG_DIR="/root/.clawd"
+CONFIG_DIR="/root/.clawdbot"
 CONFIG_FILE="$CONFIG_DIR/config.yaml"
 
 # 如果配置文件不存在，复制示例配置

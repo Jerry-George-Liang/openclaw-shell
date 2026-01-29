@@ -2,7 +2,7 @@
 # ClawdBot Docker 镜像
 # 
 # 构建: docker build -t clawdbot .
-# 运行: docker run -d --name clawdbot -v ~/.clawd:/root/.clawd clawdbot
+# 运行: docker run -d --name clawdbot -v ~/.clawdbot:/root/.clawdbot clawdbot
 # ============================================================
 
 FROM node:22-alpine
@@ -30,17 +30,17 @@ WORKDIR /app
 RUN npm install -g clawdbot@latest
 
 # 创建配置目录
-RUN mkdir -p /root/.clawd/logs \
-    /root/.clawd/data \
-    /root/.clawd/skills \
-    /root/.clawd/backups
+RUN mkdir -p /root/.clawdbot/logs \
+    /root/.clawdbot/data \
+    /root/.clawdbot/skills \
+    /root/.clawdbot/backups
 
 # 复制默认配置和技能
-COPY examples/config.example.yaml /root/.clawd/config.yaml.example
-COPY examples/skills/ /root/.clawd/skills/
+COPY examples/config.example.yaml /root/.clawdbot/config.yaml.example
+COPY examples/skills/ /root/.clawdbot/skills/
 
 # 设置卷挂载点
-VOLUME ["/root/.clawd"]
+VOLUME ["/root/.clawdbot"]
 
 # 暴露端口
 EXPOSE 18789
