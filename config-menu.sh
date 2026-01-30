@@ -1644,8 +1644,9 @@ config_feishu() {
     echo -e "  ${GREEN}✓ 支持 WebSocket 连接（无需公网服务器）${NC}"
     echo -e "  ${GREEN}✓ 支持私聊和群聊${NC}"
     echo -e "  ${GREEN}✓ 支持图片、文件等多媒体${NC}"
+    echo -e "  ${GREEN}✓ 个人账号即可使用，无需企业认证${NC}"
     echo ""
-    echo -e "  ${YELLOW}⚠️ 需要在飞书开放平台创建企业自建应用${NC}"
+    echo -e "  ${YELLOW}📝 需要在飞书开放平台创建应用（免费，5分钟）${NC}"
     echo ""
     print_divider
     echo ""
@@ -1660,11 +1661,12 @@ config_feishu_app() {
     clear_screen
     print_header
     
-    echo -e "${WHITE}🏢 飞书企业自建应用配置${NC}"
+    echo -e "${WHITE}🔷 飞书应用配置${NC}"
     print_divider
     echo ""
     
-    echo -e "${YELLOW}⚠️ 注意: 此方式需要企业资质认证${NC}"
+    echo -e "${GREEN}✓ 个人账号即可使用，无需企业认证！${NC}"
+    echo -e "${CYAN}  （"自建应用"只是飞书的命名，任何人都可以创建）${NC}"
     echo ""
     
     echo -e "${CYAN}配置步骤:${NC}"
