@@ -41,7 +41,7 @@
 - **Mistral AI** - Mistral Large / Codestral
 - **Azure OpenAI** - 企业级 Azure 部署
 
-> 💡 **自定义 API 地址**: Anthropic Claude 支持通过 `clawdbot.json` 配置自定义 Provider，可接入 OneAPI/NewAPI/API 代理等服务。
+> 💡 **自定义 API 地址**: Anthropic Claude 和 OpenAI GPT 都支持自定义 API 地址，可接入 OneAPI/NewAPI/API 代理等服务。配置时先输入自定义地址，再输入 API Key。
 
 ### 📱 多渠道接入
 
@@ -95,7 +95,8 @@ curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/i
 2. 安装 ClawdBot
 3. 引导完成核心配置（AI模型、身份信息）
 4. 测试 API 连接
-5. 自动打开配置菜单进行详细配置
+5. **自动启动 ClawdBot 服务**
+6. 可选打开配置菜单进行详细配置（渠道等）
 
 ### 方式二：手动安装
 
@@ -113,17 +114,25 @@ chmod +x install.sh config-menu.sh
 
 ### 安装完成后
 
-安装完成后会自动打开配置菜单，也可以手动运行：
+安装完成后脚本会：
+1. **自动询问是否启动服务**（推荐选择 Y）
+2. 后台启动 ClawdBot Gateway
+3. 可选打开配置菜单进行渠道配置
+
+如果需要后续管理：
 
 ```bash
+# 手动启动服务
+source ~/.clawdbot/env && clawdbot gateway
+
+# 后台启动服务
+clawdbot gateway start
+
 # 运行配置菜单进行详细配置
 bash ~/.clawdbot/config-menu.sh
 
 # 或从 GitHub 下载运行
 curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/config-menu.sh | bash
-
-# 启动服务
-clawdbot gateway start
 ```
 
 ## ⚙️ 详细配置
@@ -138,18 +147,19 @@ clawdbot gateway start
 
 #### Anthropic Claude 配置
 
-1. 访问 [Anthropic Console](https://console.anthropic.com/)
-2. 创建账号并获取 API Key
-3. 在配置菜单中选择 Anthropic Claude
-4. 输入 API Key
-5. 选择模型（推荐 Sonnet 4）
+1. 在配置菜单中选择 Anthropic Claude
+2. **先输入自定义 API 地址**（留空使用官方 API）
+3. 输入 API Key（官方 Key 从 [Anthropic Console](https://console.anthropic.com/) 获取）
+4. 选择模型（推荐 Sonnet 4）
+
+> 💡 支持 OneAPI/NewAPI 等第三方代理服务，只需填入对应的 API 地址和 Key
 
 #### OpenAI GPT 配置
 
-1. 访问 [OpenAI Platform](https://platform.openai.com/)
-2. 获取 API Key
-3. 在配置菜单中选择 OpenAI GPT
-4. 输入 API Key
+1. 在配置菜单中选择 OpenAI GPT
+2. **先输入自定义 API 地址**（留空使用官方 API）
+3. 输入 API Key（官方 Key 从 [OpenAI Platform](https://platform.openai.com/) 获取）
+4. 选择模型
 
 #### Ollama 本地模型
 
@@ -162,25 +172,6 @@ ollama pull llama3
 
 # 3. 在配置菜单中选择 Ollama
 # 输入服务地址：http://localhost:11434
-```
-
-#### OpenAI Compatible (通用兼容接口)
-
-适用于 OneAPI、New API、各种代理服务等任何兼容 OpenAI API 格式的服务。
-
-1. 在配置菜单中选择 `OpenAI Compatible`
-2. 输入 API 地址（如 `https://your-api.com/v1`）
-3. 输入 API Key
-4. 选择或输入模型名称
-
-**配置示例：**
-
-```yaml
-llm:
-  provider: openai-compatible
-  base_url: "https://oneapi.example.com/v1"
-  api_key: "sk-your-api-key"
-  model: claude-sonnet-4.5
 ```
 
 #### Groq (超快推理)
@@ -278,79 +269,50 @@ clawdbot backup
 ClawdBot 使用以下配置方式：
 
 - **环境变量**: `~/.clawdbot/env` - 存储 API Key 和 Base URL
-- **ClawdBot 配置**: `~/.clawdbot/clawdbot.json` - ClawdBot 内部配置
+- **ClawdBot 配置**: `~/.clawdbot/clawdbot.json` - ClawdBot 内部配置（自动管理）
 - **命令行工具**: `clawdbot config set` / `clawdbot models set` 等
 
-> 注意：以下配置示例仅供参考，实际配置通过安装向导或 `config-menu.sh` 完成
+> 💡 **注意**：配置主要通过安装向导或 `config-menu.sh` 完成，无需手动编辑配置文件
 
-### 完整配置示例
+### 环境变量配置示例
 
-```yaml
-# ClawdBot 配置文件
-version: "1.0"
-debug: false
+`~/.clawdbot/env` 文件内容：
 
-# AI 模型配置
-llm:
-  provider: anthropic           # 提供商: anthropic/openai/ollama
-  api_key: "sk-ant-xxx"         # API Key
-  model: claude-sonnet-4-20250514  # 模型名称
-  max_tokens: 4096              # 最大输出 token
-  temperature: 0.7              # 温度参数 (0-1)
+```bash
+# ClawdBot 环境变量配置
+export ANTHROPIC_API_KEY=sk-ant-xxxxx
+export ANTHROPIC_BASE_URL=https://your-api-proxy.com  # 可选，自定义 API 地址
 
-# 身份配置
-identity:
-  bot_name: "Clawd"             # 助手名称
-  user_name: "主人"              # 你的称呼
-  timezone: "Asia/Shanghai"     # 时区
-  language: "zh-CN"             # 语言
-  personality: |                # 个性描述
-    你是一个聪明、幽默、有创造力的AI助手。
-    你善于分析问题，提供有见地的建议。
+# 或者 OpenAI
+export OPENAI_API_KEY=sk-xxxxx
+export OPENAI_BASE_URL=https://your-api-proxy.com/v1  # 可选
+```
 
-# 网关配置
-gateway:
-  host: "127.0.0.1"
-  port: 18789
+### 自定义 Provider 配置
 
-# 渠道配置
-channels:
-  telegram:
-    enabled: true
-    token: "your-bot-token"
-    allowed_users:
-      - "your-user-id"
-  
-  discord:
-    enabled: false
-    token: "your-bot-token"
-    channels:
-      - "channel-id"
+当使用自定义 API 地址时，安装脚本会自动在 `~/.clawdbot/clawdbot.json` 中配置自定义 Provider：
 
-# 记忆系统
-memory:
-  enabled: true
-  storage_path: "~/.clawdbot/data/memory"
-  max_context_length: 32000
-
-# Skills 技能
-skills:
-  enabled: true
-  path: "~/.clawdbot/skills"
-
-# 安全配置
-security:
-  enable_shell_commands: false  # 允许执行系统命令
-  enable_file_access: false     # 允许文件访问
-  enable_web_browsing: true     # 允许网络浏览
-  sandbox_mode: true            # 沙箱模式
-
-# 日志配置
-logging:
-  level: "info"                 # 日志级别: debug/info/warn/error
-  path: "~/.clawdbot/logs"
-  max_size: "10MB"
-  max_files: 5
+```json
+{
+  "models": {
+    "providers": {
+      "anthropic-custom": {
+        "baseUrl": "https://your-api-proxy.com",
+        "apiKey": "your-api-key",
+        "models": [
+          {
+            "id": "claude-sonnet-4-5-20250929",
+            "name": "claude-sonnet-4-5-20250929",
+            "api": "anthropic-messages",
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
+  }
+}
 ```
 
 ### 目录结构

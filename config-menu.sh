@@ -1997,6 +1997,22 @@ configure_custom_provider() {
     local base_url="$4"
     local config_file="$5"
     
+    # 参数校验
+    if [ -z "$model" ]; then
+        log_error "模型名称不能为空"
+        return 1
+    fi
+    
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空"
+        return 1
+    fi
+    
+    if [ -z "$base_url" ]; then
+        log_error "API 地址不能为空"
+        return 1
+    fi
+    
     log_info "配置自定义 Provider..."
     
     # 确定 API 类型
@@ -2006,12 +2022,40 @@ configure_custom_provider() {
     fi
     local provider_id="${provider}-custom"
     
-    # 检查是否存在旧配置，询问是否清理
+    # 先检查是否存在旧的自定义配置，并询问是否清理
     local do_cleanup="false"
     if [ -f "$config_file" ]; then
-        if grep -q "anthropic-custom\|openai-custom\|openai/claude" "$config_file" 2>/dev/null; then
+        # 检查是否有旧的自定义 provider 配置
+        local has_old_config="false"
+        if grep -q '"anthropic-custom"' "$config_file" 2>/dev/null || \
+           grep -q '"openai-custom"' "$config_file" 2>/dev/null; then
+            has_old_config="true"
+        fi
+        
+        if [ "$has_old_config" = "true" ]; then
             echo ""
-            echo -e "${YELLOW}检测到旧的自定义配置，是否清理？${NC}"
+            echo -e "${CYAN}当前已有自定义 Provider 配置:${NC}"
+            # 显示当前配置的 provider 和模型
+            if command -v node &> /dev/null; then
+                node -e "
+const fs = require('fs');
+try {
+    const config = JSON.parse(fs.readFileSync('$config_file', 'utf8'));
+    const providers = config.models?.providers || {};
+    for (const [id, p] of Object.entries(providers)) {
+        if (id.includes('-custom')) {
+            console.log('  - Provider: ' + id);
+            console.log('    API 地址: ' + p.baseUrl);
+            if (p.models?.length) {
+                console.log('    模型: ' + p.models.map(m => m.id).join(', '));
+            }
+        }
+    }
+} catch (e) {}
+" 2>/dev/null
+            fi
+            echo ""
+            echo -e "${YELLOW}是否清理旧的自定义配置？${NC}"
             echo -e "${GRAY}(清理可避免配置累积，推荐选择 Y)${NC}"
             if confirm "清理旧配置？" "y"; then
                 do_cleanup="true"
