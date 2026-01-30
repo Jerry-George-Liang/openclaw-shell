@@ -442,15 +442,71 @@ test_discord_bot() {
     
     if echo "$bot_info" | grep -q '"id"'; then
         local bot_name=$(echo "$bot_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('username', 'Unknown'))" 2>/dev/null)
-        log_info "Bot 验证成功: $bot_name"
+        local bot_id=$(echo "$bot_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id', ''))" 2>/dev/null)
+        log_info "Bot 验证成功: $bot_name (ID: $bot_id)"
     else
         log_error "Bot Token 无效"
         return 1
     fi
     
-    # 2. 发送测试消息
+    # 2. 检查机器人所在的服务器
     echo ""
-    echo -e "${YELLOW}2. 发送测试消息到频道...${NC}"
+    echo -e "${YELLOW}2. 检查机器人所在的服务器...${NC}"
+    local guilds=$(curl -s "https://discord.com/api/v10/users/@me/guilds" \
+        -H "Authorization: Bot $token" 2>/dev/null)
+    
+    local guild_count=$(echo "$guilds" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null)
+    if [ "$guild_count" = "0" ] || [ -z "$guild_count" ]; then
+        log_error "机器人尚未加入任何服务器！"
+        echo ""
+        echo -e "${YELLOW}请先邀请机器人到你的服务器:${NC}"
+        echo "  1. Discord Developer Portal → 你的应用 → OAuth2 → URL Generator"
+        echo "  2. Scopes 勾选: bot"
+        echo "  3. Bot Permissions 勾选: View Channels, Send Messages"
+        echo "  4. 复制链接并在浏览器中打开，选择服务器"
+        echo ""
+        echo -e "${WHITE}邀请链接示例:${NC}"
+        echo "  https://discord.com/oauth2/authorize?client_id=${bot_id}&scope=bot&permissions=3072"
+        return 1
+    else
+        log_info "机器人已加入 $guild_count 个服务器"
+        # 显示服务器列表
+        echo "$guilds" | python3 -c "
+import sys, json
+guilds = json.load(sys.stdin)
+for g in guilds[:5]:
+    print(f\"    • {g['name']} (ID: {g['id']})\")
+if len(guilds) > 5:
+    print(f'    ... 还有 {len(guilds)-5} 个服务器')
+" 2>/dev/null
+    fi
+    
+    # 3. 检查频道访问权限
+    echo ""
+    echo -e "${YELLOW}3. 检查频道访问权限...${NC}"
+    local channel_info=$(curl -s "https://discord.com/api/v10/channels/$channel_id" \
+        -H "Authorization: Bot $token" 2>/dev/null)
+    
+    if echo "$channel_info" | grep -q '"id"'; then
+        local channel_name=$(echo "$channel_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('name', 'Unknown'))" 2>/dev/null)
+        local guild_id=$(echo "$channel_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('guild_id', ''))" 2>/dev/null)
+        log_info "频道访问正常: #$channel_name (服务器ID: $guild_id)"
+    else
+        local error=$(echo "$channel_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message', '未知错误'))" 2>/dev/null)
+        log_error "无法访问频道: $error"
+        echo ""
+        if echo "$error" | grep -qi "Unknown Channel"; then
+            echo -e "${YELLOW}频道 ID 可能不正确，请重新复制${NC}"
+        else
+            echo -e "${YELLOW}机器人可能不在该频道所在的服务器中${NC}"
+            echo "  请确保机器人已被邀请到正确的服务器"
+        fi
+        return 1
+    fi
+    
+    # 4. 发送测试消息
+    echo ""
+    echo -e "${YELLOW}4. 发送测试消息到频道...${NC}"
     
     local message="🦞 **ClawdBot 测试消息**
 
@@ -469,7 +525,40 @@ test_discord_bot() {
         return 0
     else
         local error=$(echo "$send_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('message', '未知错误'))" 2>/dev/null)
+        local error_code=$(echo "$send_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', 0))" 2>/dev/null)
         log_error "消息发送失败: $error"
+        echo ""
+        
+        # 根据错误类型给出修复建议
+        if echo "$error" | grep -qi "Missing Access"; then
+            echo -e "${YELLOW}━━━ 修复 Missing Access 错误 ━━━${NC}"
+            echo ""
+            echo -e "${WHITE}可能原因:${NC}"
+            echo "  1. 机器人未被邀请到该频道所在的服务器"
+            echo "  2. 机器人在该频道没有发送消息权限"
+            echo "  3. 频道 ID 不正确"
+            echo ""
+            echo -e "${WHITE}解决方法:${NC}"
+            echo "  1. 确认机器人已被邀请到服务器:"
+            echo "     • 重新生成邀请链接并邀请机器人"
+            echo "     • OAuth2 → URL Generator → 勾选 bot"
+            echo "     • Bot Permissions 勾选: Send Messages, View Channels"
+            echo ""
+            echo "  2. 检查频道权限:"
+            echo "     • 右键频道 → 编辑频道 → 权限"
+            echo "     • 添加机器人角色，允许「发送消息」「查看频道」"
+            echo ""
+            echo "  3. 确认频道 ID 正确:"
+            echo "     • 开启开发者模式后，右键频道 → 复制 ID"
+            echo "     • 当前输入的频道 ID: ${WHITE}$channel_id${NC}"
+        elif echo "$error" | grep -qi "Unknown Channel"; then
+            echo -e "${YELLOW}提示: 频道 ID 无效，请检查是否正确复制${NC}"
+            echo "  当前输入: $channel_id"
+        elif echo "$error" | grep -qi "Cannot send messages"; then
+            echo -e "${YELLOW}提示: 机器人没有在该频道发送消息的权限${NC}"
+            echo "  右键频道 → 编辑频道 → 权限 → 添加机器人并允许发送消息"
+        fi
+        echo ""
         return 1
     fi
 }
@@ -1748,8 +1837,12 @@ config_discord() {
     echo ""
     echo "  1. 点击左侧 ${WHITE}OAuth2 → URL Generator${NC}"
     echo "  2. Scopes 勾选: ${WHITE}bot${NC}"
-    echo "  3. Bot Permissions 勾选: ${WHITE}Send Messages, Read Message History${NC}"
+    echo "  3. Bot Permissions 至少勾选:"
+    echo "     • ${WHITE}View Channels${NC} (查看频道)"
+    echo "     • ${WHITE}Send Messages${NC} (发送消息)"
+    echo "     • ${WHITE}Read Message History${NC} (读取消息历史)"
     echo "  4. 复制生成的 URL，在浏览器打开并选择服务器"
+    echo "  5. ${YELLOW}确保机器人在目标频道有权限！${NC}"
     echo ""
     echo -e "${CYAN}第三步: 获取频道 ID${NC}"
     echo ""
