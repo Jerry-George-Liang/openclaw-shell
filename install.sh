@@ -523,12 +523,32 @@ try {
     fi
     
     # 使用 node 或 python 来处理 JSON
+    local config_success=false
+    
     if command -v node &> /dev/null; then
+        log_info "使用 node 配置自定义 Provider..."
+        
+        # 将变量写入临时文件，避免 shell 转义问题
+        local tmp_vars="/tmp/clawdbot_provider_vars_$$.json"
+        cat > "$tmp_vars" << EOFVARS
+{
+    "config_file": "$config_file",
+    "provider_id": "$provider_id",
+    "base_url": "$base_url",
+    "api_key": "$api_key",
+    "model": "$model",
+    "api_type": "$api_type",
+    "do_cleanup": "$do_cleanup"
+}
+EOFVARS
+        
         node -e "
 const fs = require('fs');
+const vars = JSON.parse(fs.readFileSync('$tmp_vars', 'utf8'));
+
 let config = {};
 try {
-    config = JSON.parse(fs.readFileSync('$config_file', 'utf8'));
+    config = JSON.parse(fs.readFileSync(vars.config_file, 'utf8'));
 } catch (e) {
     config = {};
 }
@@ -538,12 +558,9 @@ if (!config.models) config.models = {};
 if (!config.models.providers) config.models.providers = {};
 
 // 根据用户选择决定是否清理旧配置
-if ('$do_cleanup' === 'true') {
-    // 清理旧的自定义 provider（避免累积）
+if (vars.do_cleanup === 'true') {
     delete config.models.providers['anthropic-custom'];
     delete config.models.providers['openai-custom'];
-
-    // 清理旧的错误配置模型（如 openai/claude-* 等）
     if (config.models.configured) {
         config.models.configured = config.models.configured.filter(m => {
             if (m.startsWith('openai/claude')) return false;
@@ -551,8 +568,6 @@ if ('$do_cleanup' === 'true') {
             return true;
         });
     }
-
-    // 清理旧的别名
     if (config.models.aliases) {
         delete config.models.aliases['claude-custom'];
     }
@@ -560,14 +575,14 @@ if ('$do_cleanup' === 'true') {
 }
 
 // 添加自定义 provider
-config.models.providers['$provider_id'] = {
-    baseUrl: '$base_url',
-    apiKey: '$api_key',
+config.models.providers[vars.provider_id] = {
+    baseUrl: vars.base_url,
+    apiKey: vars.api_key,
     models: [
         {
-            id: '$model',
-            name: '$model',
-            api: '$api_type',
+            id: vars.model,
+            name: vars.model,
+            api: vars.api_type,
             input: ['text','image'],
             contextWindow: 200000,
             maxTokens: 8192
@@ -575,22 +590,48 @@ config.models.providers['$provider_id'] = {
     ]
 };
 
-fs.writeFileSync('$config_file', JSON.stringify(config, null, 2));
-console.log('Custom provider configured: $provider_id');
-"
+fs.writeFileSync(vars.config_file, JSON.stringify(config, null, 2));
+console.log('Custom provider configured: ' + vars.provider_id);
+" 2>&1
         local node_exit=$?
+        rm -f "$tmp_vars" 2>/dev/null
+        
         if [ $node_exit -eq 0 ]; then
+            config_success=true
             log_info "自定义 Provider 已配置: $provider_id"
         else
-            log_warn "node 配置可能失败，尝试使用 python3..."
+            log_warn "node 配置失败 (exit: $node_exit)，尝试使用 python3..."
         fi
-    elif command -v python3 &> /dev/null; then
+    fi
+    
+    # 如果 node 失败或不存在，尝试 python3
+    if [ "$config_success" = false ] && command -v python3 &> /dev/null; then
+        log_info "使用 python3 配置自定义 Provider..."
+        
+        # 将变量写入临时文件，避免 shell 转义问题
+        local tmp_vars="/tmp/clawdbot_provider_vars_$$.json"
+        cat > "$tmp_vars" << EOFVARS
+{
+    "config_file": "$config_file",
+    "provider_id": "$provider_id",
+    "base_url": "$base_url",
+    "api_key": "$api_key",
+    "model": "$model",
+    "api_type": "$api_type",
+    "do_cleanup": "$do_cleanup"
+}
+EOFVARS
+        
         python3 -c "
 import json
 import os
 
+# 从临时文件读取变量
+with open('$tmp_vars', 'r') as f:
+    vars = json.load(f)
+
 config = {}
-config_file = '$config_file'
+config_file = vars['config_file']
 if os.path.exists(config_file):
     try:
         with open(config_file, 'r') as f:
@@ -604,33 +645,27 @@ if 'providers' not in config['models']:
     config['models']['providers'] = {}
 
 # 根据用户选择决定是否清理旧配置
-if '$do_cleanup' == 'true':
-    # 清理旧的自定义 provider（避免累积）
+if vars['do_cleanup'] == 'true':
     config['models']['providers'].pop('anthropic-custom', None)
     config['models']['providers'].pop('openai-custom', None)
-
-    # 清理旧的错误配置模型
     if 'configured' in config['models']:
         config['models']['configured'] = [
             m for m in config['models']['configured']
             if not (m.startswith('openai/claude') or 
                     (m.startswith('openrouter/claude') and 'openrouter.ai' not in m))
         ]
-
-    # 清理旧的别名
     if 'aliases' in config['models']:
         config['models']['aliases'].pop('claude-custom', None)
-    
     print('Old configurations cleaned up')
 
-config['models']['providers']['$provider_id'] = {
-    'baseUrl': '$base_url',
-    'apiKey': '$api_key',
+config['models']['providers'][vars['provider_id']] = {
+    'baseUrl': vars['base_url'],
+    'apiKey': vars['api_key'],
     'models': [
         {
-            'id': '$model',
-            'name': '$model',
-            'api': '$api_type',
+            'id': vars['model'],
+            'name': vars['model'],
+            'api': vars['api_type'],
             'input': ['text','image'],
             'contextWindow': 200000,
             'maxTokens': 8192
@@ -640,15 +675,20 @@ config['models']['providers']['$provider_id'] = {
 
 with open(config_file, 'w') as f:
     json.dump(config, f, indent=2)
-print('Custom provider configured: $provider_id')
-"
+print('Custom provider configured: ' + vars['provider_id'])
+" 2>&1
         local py_exit=$?
+        rm -f "$tmp_vars" 2>/dev/null
+        
         if [ $py_exit -eq 0 ]; then
+            config_success=true
             log_info "自定义 Provider 已配置: $provider_id"
         else
-            log_warn "python3 配置失败"
+            log_warn "python3 配置失败 (exit: $py_exit)"
         fi
-    else
+    fi
+    
+    if [ "$config_success" = false ]; then
         log_warn "无法配置自定义 Provider（需要 node 或 python3）"
     fi
     
@@ -754,6 +794,8 @@ run_onboard_wizard() {
     # AI 配置
     if [ "$skip_ai_config" = false ]; then
         setup_ai_provider
+        # 先配置 ClawdBot（设置环境变量和自定义 provider），然后再测试
+        configure_clawdbot_model
         test_api_connection
     else
         # 即使跳过配置，也可选择测试连接
@@ -772,8 +814,6 @@ run_onboard_wizard() {
         SHELL_ENABLED="false"
         FILE_ACCESS="false"
     fi
-    # 配置 ClawdBot（使用 clawdbot 命令和环境变量）
-    configure_clawdbot_model
     
     log_info "核心配置完成！"
 }
