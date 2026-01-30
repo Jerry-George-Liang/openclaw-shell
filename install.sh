@@ -414,8 +414,22 @@ EOF
         if [ -n "$clawdbot_model" ]; then
             # 加载环境变量
             source "$env_file"
-            clawdbot models set "$clawdbot_model" 2>/dev/null || true
-            log_info "默认模型已设置为: $clawdbot_model"
+            
+            # 设置默认模型（显示错误信息以便调试）
+            local set_result
+            set_result=$(clawdbot models set "$clawdbot_model" 2>&1)
+            local set_exit=$?
+            
+            if [ $set_exit -eq 0 ]; then
+                log_info "默认模型已设置为: $clawdbot_model"
+            else
+                log_warn "模型设置可能失败: $clawdbot_model"
+                echo -e "  ${GRAY}$set_result${NC}" | head -3
+                
+                # 尝试直接使用 config set
+                log_info "尝试使用 config set 设置模型..."
+                clawdbot config set models.default "$clawdbot_model" 2>/dev/null || true
+            fi
         fi
     fi
     
@@ -974,12 +988,29 @@ test_api_connection() {
         echo -e "${YELLOW}运行 clawdbot agent --local 测试...${NC}"
         echo ""
         
-        # 使用 clawdbot agent --local 测试
+        # 使用 clawdbot agent --local 测试（添加超时）
         local result
-        result=$(clawdbot agent --local --to "+1234567890" --message "回复 OK" 2>&1)
-        local exit_code=$?
+        local exit_code
         
-        if [ $exit_code -eq 0 ] && ! echo "$result" | grep -qiE "error|failed|401|403|Unknown model"; then
+        # 使用 timeout 命令（如果可用），否则直接运行
+        if command -v timeout &> /dev/null; then
+            result=$(timeout 30 clawdbot agent --local --to "+1234567890" --message "回复 OK" 2>&1)
+            exit_code=$?
+            if [ $exit_code -eq 124 ]; then
+                result="测试超时（30秒）"
+            fi
+        else
+            result=$(clawdbot agent --local --to "+1234567890" --message "回复 OK" 2>&1)
+            exit_code=$?
+        fi
+        
+        # 检查结果是否为空
+        if [ -z "$result" ]; then
+            result="(无输出 - 命令可能立即退出)"
+            exit_code=1
+        fi
+        
+        if [ $exit_code -eq 0 ] && ! echo "$result" | grep -qiE "error|failed|401|403|Unknown model|超时"; then
             test_passed=true
             echo -e "${GREEN}✓ ClawdBot AI 测试成功！${NC}"
             echo ""
@@ -987,9 +1018,10 @@ test_api_connection() {
             echo "$result" | head -3 | sed 's/^/    /'
         else
             retry_count=$((retry_count + 1))
-            echo -e "${RED}✗ ClawdBot AI 测试失败${NC}"
+            echo -e "${RED}✗ ClawdBot AI 测试失败 (退出码: $exit_code)${NC}"
             echo ""
-            echo -e "  ${RED}错误:${NC} $(echo "$result" | head -2)"
+            echo -e "  ${RED}错误:${NC}"
+            echo "$result" | head -5 | sed 's/^/    /'
             echo ""
             
             if [ $retry_count -lt $max_retries ]; then
