@@ -251,18 +251,20 @@ test_ai_connection() {
     result=$(clawdbot agent --local --to "+1234567890" --message "回复 OK" 2>&1) || true
     local exit_code=$?
     
-    # 过滤掉 Node.js 警告信息
-    result=$(echo "$result" | grep -v "ExperimentalWarning" | grep -v "at emitExperimentalWarning" | grep -v "at ModuleLoader" | grep -v "at callTranslator")
+    # 过滤掉 Node.js 警告信息和 JavaScript 错误
+    result=$(echo "$result" | grep -v "ExperimentalWarning" | grep -v "at emitExperimentalWarning" | grep -v "at ModuleLoader" | grep -v "at callTranslator" | grep -v "Cannot read properties of undefined" | grep -v "TypeError:" | grep -v "ReferenceError:")
     
     echo ""
     if [ $exit_code -eq 0 ] && ! echo "$result" | grep -qiE "error|failed|401|403|Unknown model"; then
         log_info "ClawdBot AI 测试成功！"
         echo ""
-        # 显示 AI 响应（过滤掉空行）
-        local ai_response=$(echo "$result" | grep -v "^$" | head -5)
+        # 显示 AI 响应（过滤掉空行和无关内容）
+        local ai_response=$(echo "$result" | grep -v "^$" | grep -v "^\[" | grep -v "^{" | head -5)
         if [ -n "$ai_response" ]; then
             echo -e "  ${CYAN}AI 响应:${NC}"
             echo "$ai_response" | sed 's/^/    /'
+        else
+            echo -e "  ${GREEN}✓ API 连接正常${NC}"
         fi
         return 0
     else
@@ -887,30 +889,74 @@ config_anthropic() {
     print_divider
     echo ""
     
-    echo -e "${GRAY}官方 API: https://console.anthropic.com/${NC}"
-    echo ""
-    
-    echo ""
-    read -p "$(echo -e "${YELLOW}自定义 API 地址 (留空使用官方 API): ${NC}")" base_url
-    
-    echo ""
-    # 获取当前 API Key
+    # 获取当前配置
     local current_key=$(get_env_value "ANTHROPIC_API_KEY")
+    local current_url=$(get_env_value "ANTHROPIC_BASE_URL")
+    local official_url="https://api.anthropic.com"
+    
+    # 显示当前配置
+    echo -e "${CYAN}当前配置:${NC}"
     if [ -n "$current_key" ]; then
         local masked_key="${current_key:0:8}...${current_key: -4}"
-        echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    if [ -n "$current_url" ]; then
+        echo -e "  API 地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  API 地址: ${GRAY}(使用官方)${NC}"
+    fi
+    echo ""
+    
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://console.anthropic.com/${NC}"
+    echo ""
+    print_divider
+    echo ""
+    
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key 和地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改所有设置)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    local base_url="$current_url"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}API 地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  官方地址: ${WHITE}$official_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入 API 地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        # 留空时保持当前配置
+        if [ -n "$input_url" ]; then
+            base_url="$input_url"
+        fi
+        
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
     fi
     
-    read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" api_key
-    
-    # 如果没有输入新的 key，使用现有的
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        api_key="$current_key"
-        if [ -z "$api_key" ]; then
-            log_error "API Key 不能为空"
-            press_enter
-            return
-        fi
+        log_error "API Key 不能为空，请先配置 API Key"
+        press_enter
+        return
     fi
     
     echo ""
@@ -923,7 +969,7 @@ config_anthropic() {
     print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -931,7 +977,7 @@ config_anthropic() {
         2) model="claude-opus-4-5-20251101" ;;
         3) model="claude-haiku-4-5-20251001" ;;
         4) model="claude-sonnet-4-20250514" ;;
-        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="claude-sonnet-4-5-20250929" ;;
     esac
     
@@ -941,7 +987,7 @@ config_anthropic() {
     echo ""
     log_info "Anthropic Claude 配置完成！"
     log_info "模型: $model"
-    [ -n "$base_url" ] && log_info "API 地址: $base_url"
+    [ -n "$base_url" ] && log_info "API 地址: $base_url" || log_info "API 地址: 官方"
     
     # 询问是否测试
     echo ""
@@ -960,16 +1006,71 @@ config_openai() {
     print_divider
     echo ""
     
-    echo -e "${GRAY}官方 API: https://platform.openai.com/${NC}"
+    # 获取当前配置
+    local current_key=$(get_env_value "OPENAI_API_KEY")
+    local current_url=$(get_env_value "OPENAI_BASE_URL")
+    local official_url="https://api.openai.com/v1"
+    
+    # 显示当前配置
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    if [ -n "$current_url" ]; then
+        echo -e "  API 地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  API 地址: ${GRAY}(使用官方)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}自定义 API 地址 (留空使用官方 API): ${NC}")" base_url
-    
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://platform.openai.com/${NC}"
     echo ""
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key 和地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改所有设置)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    local base_url="$current_url"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}API 地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  官方地址: ${WHITE}$official_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入 API 地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        if [ -n "$input_url" ]; then
+            base_url="$input_url"
+        fi
+        
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
     fi
@@ -984,7 +1085,7 @@ config_openai() {
     print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -992,7 +1093,7 @@ config_openai() {
         2) model="gpt-4o-mini" ;;
         3) model="gpt-4-turbo" ;;
         4) model="o1-preview" ;;
-        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="gpt-4o" ;;
     esac
     
@@ -1002,7 +1103,7 @@ config_openai() {
     echo ""
     log_info "OpenAI GPT 配置完成！"
     log_info "模型: $model"
-    [ -n "$base_url" ] && log_info "API 地址: $base_url"
+    [ -n "$base_url" ] && log_info "API 地址: $base_url" || log_info "API 地址: 官方"
     
     # 询问是否测试
     echo ""
@@ -1021,11 +1122,47 @@ config_ollama() {
     print_divider
     echo ""
     
+    # 获取当前配置
+    local current_url=$(get_env_value "OLLAMA_HOST")
+    local default_url="http://localhost:11434"
+    
     echo -e "${CYAN}Ollama 允许你在本地运行 AI 模型，无需 API Key${NC}"
     echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_url" ]; then
+        echo -e "  服务地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  服务地址: ${GRAY}(使用默认)${NC}"
+    fi
+    echo ""
     
-    read -p "$(echo -e "${YELLOW}Ollama 服务地址 (默认: http://localhost:11434): ${NC}")" ollama_url
-    ollama_url=${ollama_url:-"http://localhost:11434"}
+    echo -e "${CYAN}默认地址: ${WHITE}$default_url${NC}"
+    echo ""
+    print_divider
+    echo ""
+    
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前服务地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改服务地址)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local ollama_url="${current_url:-$default_url}"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}服务地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  默认地址: ${WHITE}$default_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入服务地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        if [ -n "$input_url" ]; then
+            ollama_url="$input_url"
+        fi
+    fi
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
@@ -1037,7 +1174,7 @@ config_ollama() {
     print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -1046,11 +1183,10 @@ config_ollama() {
         3) model="mistral" ;;
         4) model="codellama" ;;
         5) 
-            read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model
+            read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT"
             ;;
         *) model="llama3" ;;
     esac
-    
     
     # 保存到 ClawdBot 环境变量配置
     save_clawdbot_ai_config "ollama" "" "$model" "$ollama_url"
@@ -1077,21 +1213,76 @@ config_openrouter() {
     print_divider
     echo ""
     
+    # 获取当前配置 (OpenRouter 使用 OPENAI 环境变量)
+    local current_key=$(get_env_value "OPENAI_API_KEY")
+    local current_url=$(get_env_value "OPENAI_BASE_URL")
+    local official_url="https://openrouter.ai/api/v1"
+    
+    # 显示当前配置
     echo -e "${CYAN}OpenRouter 是一个多模型网关，支持多种 AI 模型${NC}"
-    echo -e "${GRAY}获取 API Key: https://openrouter.ai/${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    if [ -n "$current_url" ]; then
+        echo -e "  API 地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  API 地址: ${GRAY}(使用默认)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://openrouter.ai/${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key 和地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改所有设置)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    local base_url="${current_url:-$official_url}"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}API 地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  默认地址: ${WHITE}$official_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入 API 地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        if [ -n "$input_url" ]; then
+            base_url="$input_url"
+        fi
+        
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
     fi
-    
-    echo ""
-    local base_url=""  # ClawdBot 不支持自定义 API 地址
-    base_url=${base_url:-"https://openrouter.ai/api/v1"}
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
@@ -1103,7 +1294,7 @@ config_openrouter() {
     print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -1111,10 +1302,9 @@ config_openrouter() {
         2) model="openai/gpt-4o" ;;
         3) model="google/gemini-pro-1.5" ;;
         4) model="meta-llama/llama-3-70b-instruct" ;;
-        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="anthropic/claude-sonnet-4" ;;
     esac
-    
     
     # 保存到 ClawdBot 环境变量配置
     save_clawdbot_ai_config "openrouter" "$api_key" "$model" "$base_url"
@@ -1141,18 +1331,74 @@ config_google_gemini() {
     print_divider
     echo ""
     
-    echo -e "${GRAY}获取 API Key: https://makersuite.google.com/app/apikey${NC}"
+    # 获取当前配置
+    local current_key=$(get_env_value "GOOGLE_API_KEY")
+    local current_url=$(get_env_value "GOOGLE_BASE_URL")
+    local official_url="https://generativelanguage.googleapis.com"
+    
+    # 显示当前配置
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    if [ -n "$current_url" ]; then
+        echo -e "  API 地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  API 地址: ${GRAY}(使用官方)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://makersuite.google.com/app/apikey${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key 和地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改所有设置)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    local base_url="$current_url"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}API 地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  官方地址: ${WHITE}$official_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入 API 地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        if [ -n "$input_url" ]; then
+            base_url="$input_url"
+        fi
+        
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
-    fi    
-    echo ""
-    local base_url=""  # ClawdBot 不支持自定义 API 地址
+    fi
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
@@ -1163,17 +1409,16 @@ config_google_gemini() {
     print_menu_item "4" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
         1) model="gemini-2.0-flash" ;;
         2) model="gemini-1.5-pro" ;;
         3) model="gemini-1.5-flash" ;;
-        4) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        4) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="gemini-2.0-flash" ;;
     esac
-    
     
     # 保存到 ClawdBot 环境变量配置
     save_clawdbot_ai_config "google" "$api_key" "$model" "$base_url"
@@ -1181,7 +1426,7 @@ config_google_gemini() {
     echo ""
     log_info "Google Gemini 配置完成！"
     log_info "模型: $model"
-    [ -n "$base_url" ] && log_info "API 地址: $base_url"
+    [ -n "$base_url" ] && log_info "API 地址: $base_url" || log_info "API 地址: 官方"
     
     # 询问是否测试
     echo ""
@@ -1233,20 +1478,76 @@ config_groq() {
     print_divider
     echo ""
     
+    # 获取当前配置 (Groq 使用 OPENAI 环境变量)
+    local current_key=$(get_env_value "OPENAI_API_KEY")
+    local current_url=$(get_env_value "OPENAI_BASE_URL")
+    local official_url="https://api.groq.com/openai/v1"
+    
+    # 显示当前配置
     echo -e "${CYAN}Groq 提供超快的推理速度${NC}"
-    echo -e "${GRAY}获取 API Key: https://console.groq.com/${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    if [ -n "$current_url" ]; then
+        echo -e "  API 地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  API 地址: ${GRAY}(使用默认)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://console.groq.com/${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key 和地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改所有设置)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    local base_url="${current_url:-$official_url}"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}API 地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  默认地址: ${WHITE}$official_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入 API 地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        if [ -n "$input_url" ]; then
+            base_url="$input_url"
+        fi
+        
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
-    fi    
-    echo ""
-    local base_url=""  # ClawdBot 不支持自定义 API 地址
-    base_url=${base_url:-"https://api.groq.com/openai/v1"}
+    fi
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
@@ -1258,7 +1559,7 @@ config_groq() {
     print_menu_item "5" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -1266,10 +1567,9 @@ config_groq() {
         2) model="llama-3.1-8b-instant" ;;
         3) model="mixtral-8x7b-32768" ;;
         4) model="gemma2-9b-it" ;;
-        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="llama-3.3-70b-versatile" ;;
     esac
-    
     
     # 保存到 ClawdBot 环境变量配置
     save_clawdbot_ai_config "groq" "$api_key" "$model" "$base_url"
@@ -1296,19 +1596,74 @@ config_mistral() {
     print_divider
     echo ""
     
-    echo -e "${GRAY}获取 API Key: https://console.mistral.ai/${NC}"
+    # 获取当前配置 (Mistral 使用 OPENAI 环境变量)
+    local current_key=$(get_env_value "OPENAI_API_KEY")
+    local current_url=$(get_env_value "OPENAI_BASE_URL")
+    local official_url="https://api.mistral.ai/v1"
+    
+    # 显示当前配置
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    if [ -n "$current_url" ]; then
+        echo -e "  API 地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  API 地址: ${GRAY}(使用默认)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://console.mistral.ai/${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key 和地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改所有设置)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    local base_url="${current_url:-$official_url}"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}API 地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  默认地址: ${WHITE}$official_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入 API 地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        if [ -n "$input_url" ]; then
+            base_url="$input_url"
+        fi
+        
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
-    fi    
-    echo ""
-    local base_url=""  # ClawdBot 不支持自定义 API 地址
-    base_url=${base_url:-"https://api.mistral.ai/v1"}
+    fi
     
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
@@ -1319,17 +1674,16 @@ config_mistral() {
     print_menu_item "4" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
         1) model="mistral-large-latest" ;;
         2) model="mistral-small-latest" ;;
         3) model="codestral-latest" ;;
-        4) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        4) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="mistral-large-latest" ;;
     esac
-    
     
     # 保存到 ClawdBot 环境变量配置
     save_clawdbot_ai_config "mistral" "$api_key" "$model" "$base_url"
@@ -1356,14 +1710,55 @@ config_xai() {
     print_divider
     echo ""
     
+    # 获取当前配置
+    local current_key=$(get_env_value "XAI_API_KEY")
+    local official_url="https://api.x.ai/v1"
+    
+    # 显示当前配置
     echo -e "${CYAN}xAI 是 Elon Musk 创立的 AI 公司，提供 Grok 系列模型${NC}"
-    echo -e "${GRAY}获取 API Key: https://console.x.ai/${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://console.x.ai/${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key)" "🔄"
+    print_menu_item "2" "完整配置 (可修改 API Key)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
     fi
@@ -1379,7 +1774,7 @@ config_xai() {
     print_menu_item "6" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -1388,7 +1783,7 @@ config_xai() {
         3) model="grok-3-fast-latest" ;;
         4) model="grok-3-mini-fast-latest" ;;
         5) model="grok-2-vision-latest" ;;
-        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="grok-4-fast" ;;
     esac
     
@@ -1416,14 +1811,55 @@ config_zai() {
     print_divider
     echo ""
     
+    # 获取当前配置
+    local current_key=$(get_env_value "ZAI_API_KEY")
+    local official_url="https://open.bigmodel.cn/api/paas/v4"
+    
+    # 显示当前配置
     echo -e "${CYAN}智谱 AI 是中国领先的 AI 公司，提供 GLM 系列模型${NC}"
-    echo -e "${GRAY}获取 API Key: https://open.bigmodel.cn/${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://open.bigmodel.cn/${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key)" "🔄"
+    print_menu_item "2" "完整配置 (可修改 API Key)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
     fi
@@ -1439,7 +1875,7 @@ config_zai() {
     print_menu_item "6" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -1448,7 +1884,7 @@ config_zai() {
         3) model="glm-4.6v" ;;
         4) model="glm-4.5-flash" ;;
         5) model="glm-4.5-air" ;;
-        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="glm-4.7" ;;
     esac
     
@@ -1476,8 +1912,26 @@ config_minimax() {
     print_divider
     echo ""
     
+    # 获取当前配置
+    local current_key=$(get_env_value "MINIMAX_API_KEY")
+    local official_url="https://api.minimax.chat/v1"
+    
+    # 显示当前配置
     echo -e "${CYAN}MiniMax 是中国领先的 AI 公司，提供大语言模型服务${NC}"
-    echo -e "${GRAY}获取 API Key: https://platform.minimax.chat/${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    echo ""
+    
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://platform.minimax.chat/${NC}"
+    echo ""
+    print_divider
     echo ""
     
     echo -e "${YELLOW}选择区域:${NC}"
@@ -1485,7 +1939,7 @@ config_minimax() {
     print_menu_item "2" "国内版 (minimax-cn)" "🇨🇳"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" region_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" region_choice < "$TTY_INPUT"
     region_choice=${region_choice:-1}
     
     local provider="minimax"
@@ -1494,10 +1948,33 @@ config_minimax() {
     fi
     
     echo ""
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key)" "🔄"
+    print_menu_item "2" "完整配置 (可修改 API Key)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
     
+    local api_key="$current_key"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
     fi
@@ -1510,13 +1987,13 @@ config_minimax() {
     print_menu_item "3" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-3] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-3] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
         1) model="MiniMax-M2.1" ;;
         2) model="MiniMax-M2" ;;
-        3) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        3) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="MiniMax-M2.1" ;;
     esac
     
@@ -1545,17 +2022,57 @@ config_opencode() {
     print_divider
     echo ""
     
+    # 获取当前配置
+    local current_key=$(get_env_value "OPENCODE_API_KEY")
+    local official_url="https://api.opencode.ai/v1"
+    
+    # 显示当前配置
     echo -e "${CYAN}OpenCode 是一个免费的多模型 API 网关${NC}"
     echo -e "${GREEN}✓ 支持多种模型: Claude, GPT, Gemini, GLM 等${NC}"
     echo -e "${GREEN}✓ 部分模型免费使用${NC}"
     echo ""
-    echo -e "${GRAY}获取 API Key: https://opencode.ai/${NC}"
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://opencode.ai/${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key)" "🔄"
+    print_menu_item "2" "完整配置 (可修改 API Key)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
     fi
@@ -1572,7 +2089,7 @@ config_opencode() {
     print_menu_item "7" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-7] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-7] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -1582,7 +2099,7 @@ config_opencode() {
         4) model="gemini-3-pro" ;;
         5) model="glm-4.7-free" ;;
         6) model="gpt-5-codex" ;;
-        7) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        7) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="claude-sonnet-4-5" ;;
     esac
     
@@ -1610,16 +2127,56 @@ config_google_gemini_cli() {
     print_divider
     echo ""
     
+    # 获取当前配置
+    local current_key=$(get_env_value "GOOGLE_API_KEY")
+    local official_url="https://generativelanguage.googleapis.com"
+    
     echo -e "${YELLOW}⚠️ 实验性功能${NC}"
     echo ""
     echo -e "${CYAN}Google Gemini CLI 提供最新的 Gemini 模型预览版${NC}"
-    echo -e "${GRAY}获取 API Key: https://aistudio.google.com/apikey${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://aistudio.google.com/apikey${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key)" "🔄"
+    print_menu_item "2" "完整配置 (可修改 API Key)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
     fi
@@ -1635,7 +2192,7 @@ config_google_gemini_cli() {
     print_menu_item "6" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -1644,7 +2201,7 @@ config_google_gemini_cli() {
         3) model="gemini-2.5-pro" ;;
         4) model="gemini-2.5-flash" ;;
         5) model="gemini-2.0-flash" ;;
-        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="gemini-3-pro-preview" ;;
     esac
     
@@ -1672,17 +2229,55 @@ config_google_antigravity() {
     print_divider
     echo ""
     
+    # 获取当前配置
+    local current_key=$(get_env_value "GOOGLE_API_KEY")
+    
     echo -e "${YELLOW}⚠️ 实验性功能${NC}"
     echo ""
     echo -e "${CYAN}Google Antigravity 是 Google 的实验性 AI 服务${NC}"
     echo -e "${CYAN}提供多种顶级模型的访问${NC}"
-    echo -e "${GRAY}获取 API Key: 请联系 Google Cloud 获取访问权限${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
     echo ""
     
-    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    echo -e "${GRAY}获取 API Key: 请联系 Google Cloud 获取访问权限${NC}"
+    echo ""
+    print_divider
+    echo ""
     
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key)" "🔄"
+    print_menu_item "2" "完整配置 (可修改 API Key)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
     if [ -z "$api_key" ]; then
-        log_error "API Key 不能为空"
+        log_error "API Key 不能为空，请先配置 API Key"
         press_enter
         return
     fi
@@ -1699,7 +2294,7 @@ config_google_antigravity() {
     print_menu_item "7" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-7] (默认: 1): ${NC}")" model_choice
+    read -p "$(echo -e "${YELLOW}请选择 [1-7] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
@@ -1709,7 +2304,7 @@ config_google_antigravity() {
         4) model="claude-sonnet-4-5" ;;
         5) model="claude-opus-4-5-thinking" ;;
         6) model="gpt-oss-120b-medium" ;;
-        7) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        7) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
         *) model="gemini-3-pro-high" ;;
     esac
     
@@ -2252,23 +2847,27 @@ config_feishu_app() {
     echo ""
     echo "  ${WHITE}第二步: 飞书开放平台创建应用${NC}"
     echo "    1. 访问 https://open.feishu.cn/"
-    echo "    2. 创建企业自建应用 → 添加机器人能力"
+    echo "    2. 创建企业自建应用 → 添加「机器人」能力"
     echo "    3. 获取 App ID 和 App Secret"
     echo ""
     echo "  ${WHITE}第三步: 配置机器人权限${NC}"
     echo "    • 权限管理 → 添加以下权限:"
-    echo "      - contact:user.base:readonly (用户信息)"
     echo "      - im:message (收发消息)"
     echo "      - im:message:send_as_bot (发送消息)"
-    echo "      - im:resource (上传下载媒体)"
+    echo "      - im:chat:readonly (读取群信息)"
     echo ""
     echo "  ${WHITE}第四步: 输入配置信息${NC}"
     echo "    • 在此输入 App ID 和 App Secret"
+    echo "    • ${GREEN}使用长连接模式，无需 Verification Token${NC}"
     echo ""
-    echo "  ${WHITE}第五步: 配置事件订阅${NC}"
-    echo "    • 事件配置 → 选择「长连接」(WebSocket)"
-    echo "    • 无需公网服务器，无需 Webhook 地址"
+    echo "  ${WHITE}第五步: 配置事件订阅（飞书后台）${NC}"
+    echo "    • 事件与回调 → 选择「使用长连接接收事件」"
+    echo "    • ${GREEN}无需公网服务器，无需 Webhook 地址${NC}"
     echo "    • 添加事件: im.message.receive_v1"
+    echo ""
+    echo "  ${WHITE}第六步: 发布应用并添加到群组${NC}"
+    echo "    • 版本管理与发布 → 创建版本 → 发布"
+    echo "    • 在飞书群组设置中添加机器人"
     echo ""
     print_divider
     echo ""
@@ -2294,12 +2893,14 @@ config_feishu_app() {
     echo ""
     echo -e "${CYAN}请打开飞书开放平台完成以下操作:${NC}"
     echo "  1. 访问 https://open.feishu.cn/"
-    echo "  2. 创建企业自建应用 → 机器人"
+    echo "  2. 创建企业自建应用 → 添加「机器人」能力"
     echo "  3. 获取 App ID 和 App Secret"
     echo "  4. 权限管理 → 添加权限:"
-    echo "     - im:message.receive_v1"
-    echo "     - im:message:send_as_bot"
-    echo "     - im:chat:readonly"
+    echo "     - im:message (收发消息)"
+    echo "     - im:message:send_as_bot (发送消息)"
+    echo "     - im:chat:readonly (读取群信息)"
+    echo ""
+    echo -e "${GREEN}💡 提示: 使用长连接模式，无需配置公网 Webhook 地址${NC}"
     echo ""
     
     if ! confirm "已完成飞书后台配置，继续输入信息？"; then
@@ -2311,10 +2912,11 @@ config_feishu_app() {
     echo ""
     echo -e "${WHITE}━━━ 第四步: 输入配置信息 ━━━${NC}"
     echo ""
+    echo -e "${CYAN}📝 使用长连接模式，只需要 App ID 和 App Secret${NC}"
+    echo -e "${GRAY}   (无需 Verification Token 和 Encrypt Key)${NC}"
+    echo ""
     read -p "$(echo -e "${YELLOW}输入 App ID: ${NC}")" feishu_app_id
     read -p "$(echo -e "${YELLOW}输入 App Secret: ${NC}")" feishu_app_secret
-    read -p "$(echo -e "${YELLOW}输入 Verification Token (事件订阅验证): ${NC}")" feishu_verify_token
-    read -p "$(echo -e "${YELLOW}输入 Encrypt Key (可选，留空跳过): ${NC}")" feishu_encrypt_key
     
     if [ -z "$feishu_app_id" ] || [ -z "$feishu_app_secret" ]; then
         log_error "App ID 和 App Secret 不能为空"
@@ -2333,13 +2935,13 @@ config_feishu_app() {
     clawdbot config set channels.feishu.appSecret "$feishu_app_secret" 2>/dev/null
     clawdbot config set channels.feishu.enabled true 2>/dev/null
     
-    # 设置连接模式为 WebSocket（推荐，无需公网服务器）
+    # 设置连接模式为 WebSocket 长连接（无需公网服务器）
     clawdbot config set channels.feishu.connectionMode "websocket" 2>/dev/null
     
     # 设置域名（国内用 feishu，国际用 lark）
     clawdbot config set channels.feishu.domain "feishu" 2>/dev/null
     
-    # 设置群组策略
+    # 设置群组策略：需要 @机器人 才响应
     clawdbot config set channels.feishu.requireMention true 2>/dev/null
     
     if [ $? -eq 0 ]; then
@@ -2350,29 +2952,41 @@ config_feishu_app() {
     
     echo ""
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${WHITE}✅ 第四步完成！企业应用配置已保存${NC}"
+    echo -e "${WHITE}✅ 第四步完成！应用配置已保存${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo -e "App ID: ${WHITE}${feishu_app_id:0:15}...${NC}"
-    echo -e "连接模式: ${WHITE}WebSocket（推荐）${NC}"
+    echo -e "连接模式: ${WHITE}WebSocket 长连接${NC}"
+    echo -e "${GREEN}✓ 无需公网服务器${NC}"
     echo ""
-    echo -e "${WHITE}━━━ 第五步: 配置事件订阅 (请在飞书后台完成) ━━━${NC}"
+    echo -e "${WHITE}━━━ 第五步: 配置事件订阅 (飞书后台) ━━━${NC}"
     echo ""
-    echo -e "${CYAN}📋 请在飞书开放平台完成最后配置:${NC}"
+    echo -e "${CYAN}📋 请在飞书开放平台完成以下配置:${NC}"
     echo ""
-    echo -e "  ${WHITE}事件配置方式: 选择「长连接」(推荐)${NC}"
-    echo "    • 无需公网服务器"
-    echo "    • 无需配置 Webhook 地址"
+    echo -e "  ${WHITE}1. 事件与回调 → 选择「使用长连接接收事件」${NC}"
+    echo -e "     ${GREEN}✓ 无需公网服务器，无需 Webhook 地址${NC}"
     echo ""
-    echo "  ${WHITE}添加事件订阅:${NC}"
-    echo "    • im.message.receive_v1 (接收消息，必须)"
-    echo "    • im.message.message_read_v1 (已读回执)"
-    echo "    • im.chat.member.bot.added_v1 (机器人入群)"
+    echo -e "  ${WHITE}2. 添加事件订阅:${NC}"
+    echo "     • im.message.receive_v1 (接收消息，必须)"
+    echo "     • im.message.message_read_v1 (已读回执，可选)"
+    echo "     • im.chat.member.bot.added_v1 (机器人入群，可选)"
     echo ""
-    echo "  ${WHITE}发布应用:${NC}"
-    echo "    • 创建测试版本或正式发布"
-    echo "    • 将机器人添加到群组"
-    echo "    • @机器人 开始对话"
+    echo -e "${WHITE}━━━ 第六步: 发布应用并添加到群组 ━━━${NC}"
+    echo ""
+    echo -e "${CYAN}📋 发布应用:${NC}"
+    echo "  1. 版本管理与发布 → 创建版本"
+    echo "  2. 设置可用范围（选择可使用此应用的人/部门）"
+    echo "  3. 提交审核（内部应用通常自动通过）"
+    echo ""
+    echo -e "${CYAN}📋 添加机器人到群组:${NC}"
+    echo "  ${WHITE}方法一: 在飞书客户端添加${NC}"
+    echo "    1. 打开目标群组 → 设置（右上角 ⚙️）"
+    echo "    2. 群机器人 → 添加机器人"
+    echo "    3. 搜索你的机器人名称并添加"
+    echo ""
+    echo "  ${WHITE}方法二: 在开放平台配置默认群组${NC}"
+    echo "    1. 应用功能 → 机器人"
+    echo "    2. 配置「消息卡片请求网址」等（可选）"
     echo ""
     echo -e "${YELLOW}⚠️  重要: 需要重启 Gateway 才能生效！${NC}"
     echo ""
@@ -2914,7 +3528,8 @@ configure_custom_provider() {
     mkdir -p "$config_dir" 2>/dev/null || true
     
     # 确定 API 类型
-    local api_type="openai-chat"
+    # ClawdBot 支持: anthropic-messages, openai-responses
+    local api_type="openai-responses"
     if [ "$provider" = "anthropic" ]; then
         api_type="anthropic-messages"
     fi

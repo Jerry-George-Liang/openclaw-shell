@@ -231,13 +231,25 @@ channels:
     # App Secret（从飞书开放平台获取）
     app_secret: "your-feishu-app-secret"
     
-    # 事件订阅验证 Token
-    verify_token: "your-verify-token"
+    # 连接模式: "websocket"（长连接，推荐）或 "webhook"
+    # 使用 websocket 长连接无需公网服务器
+    # 在飞书后台「事件与回调」选择「使用长连接接收事件」
+    connection_mode: "websocket"
     
-    # 加密密钥（可选）
+    # 域名: "feishu"（国内）或 "lark"（国际版）
+    domain: "feishu"
+    
+    # 群聊中是否需要 @机器人 才响应
+    require_mention: true
+    
+    # ---- 以下配置仅 webhook 模式需要 ----
+    # 事件订阅验证 Token（仅 webhook 模式需要）
+    # verify_token: "your-verify-token"
+    
+    # 加密密钥（可选，仅 webhook 模式需要）
     # encrypt_key: "your-encrypt-key"
     
-    # Webhook 路径（默认 /channels/feishu/webhook）
+    # Webhook 路径（仅 webhook 模式需要）
     # webhook_path: "/channels/feishu/webhook"
 
 # ============================================================
