@@ -204,6 +204,27 @@ channels:
     enabled: false
     # 需要完整磁盘访问权限，运行 clawdbot onboard --provider imessage
 
+  # ----------------------------------------------------------
+  # 飞书配置 (Feishu/Lark)
+  # ----------------------------------------------------------
+  feishu:
+    enabled: false
+    
+    # App ID（从飞书开放平台获取）
+    app_id: "your-feishu-app-id"
+    
+    # App Secret（从飞书开放平台获取）
+    app_secret: "your-feishu-app-secret"
+    
+    # 事件订阅验证 Token
+    verify_token: "your-verify-token"
+    
+    # 加密密钥（可选）
+    # encrypt_key: "your-encrypt-key"
+    
+    # Webhook 路径（默认 /channels/feishu/webhook）
+    # webhook_path: "/channels/feishu/webhook"
+
 # ============================================================
 # 记忆系统配置
 # ============================================================

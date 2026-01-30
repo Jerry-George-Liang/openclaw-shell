@@ -55,6 +55,7 @@
 - Slack
 - 微信 (WeChat)
 - iMessage (仅 macOS)
+- 飞书 (Feishu)
 
 ### 🧪 快速测试
 
@@ -207,6 +208,21 @@ ollama pull llama3
 6. 邀请机器人到你的服务器
 7. 获取目标频道的 **Channel ID**（右键频道 → 复制 ID）
 8. 在配置菜单中输入以上信息
+
+### 配置飞书机器人
+
+1. 访问 [飞书开放平台](https://open.feishu.cn/)
+2. 创建企业自建应用，选择"机器人"能力
+3. 获取 **App ID** 和 **App Secret**
+4. 在"权限管理"中添加权限：
+   - `im:message.receive_v1` (接收消息)
+   - `im:message:send_as_bot` (发送消息)
+   - `im:chat:readonly` (读取会话信息)
+5. 配置"事件订阅"：
+   - 请求地址：`https://你的服务器:18789/channels/feishu/webhook`
+   - 添加事件：`im.message.receive_v1`
+6. 发布应用并添加到群组
+7. 在配置菜单中选择飞书，输入以上信息
 
 ## 📝 常用命令
 
