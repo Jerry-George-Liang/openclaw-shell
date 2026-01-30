@@ -416,8 +416,9 @@ EOF
             source "$env_file"
             
             # 设置默认模型（显示错误信息以便调试）
+            # 添加 || true 防止 set -e 导致脚本退出
             local set_result
-            set_result=$(clawdbot models set "$clawdbot_model" 2>&1)
+            set_result=$(clawdbot models set "$clawdbot_model" 2>&1) || true
             local set_exit=$?
             
             if [ $set_exit -eq 0 ]; then
@@ -448,20 +449,24 @@ configure_custom_provider() {
     # 参数校验
     if [ -z "$model" ]; then
         log_error "模型名称不能为空"
-        return 1
+        return 0  # 返回 0 防止 set -e 退出
     fi
     
     if [ -z "$api_key" ]; then
         log_error "API Key 不能为空"
-        return 1
+        return 0
     fi
     
     if [ -z "$base_url" ]; then
         log_error "API 地址不能为空"
-        return 1
+        return 0
     fi
     
     log_step "配置自定义 Provider..."
+    
+    # 确保配置目录存在
+    local config_dir=$(dirname "$config_file")
+    mkdir -p "$config_dir" 2>/dev/null || true
     
     # 确定 API 类型
     local api_type="openai-chat"
@@ -572,7 +577,13 @@ config.models.providers['$provider_id'] = {
 
 fs.writeFileSync('$config_file', JSON.stringify(config, null, 2));
 console.log('Custom provider configured: $provider_id');
-" 2>/dev/null && log_info "自定义 Provider 已配置: $provider_id"
+"
+        local node_exit=$?
+        if [ $node_exit -eq 0 ]; then
+            log_info "自定义 Provider 已配置: $provider_id"
+        else
+            log_warn "node 配置可能失败，尝试使用 python3..."
+        fi
     elif command -v python3 &> /dev/null; then
         python3 -c "
 import json
@@ -630,9 +641,24 @@ config['models']['providers']['$provider_id'] = {
 with open(config_file, 'w') as f:
     json.dump(config, f, indent=2)
 print('Custom provider configured: $provider_id')
-" 2>/dev/null && log_info "自定义 Provider 已配置: $provider_id"
+"
+        local py_exit=$?
+        if [ $py_exit -eq 0 ]; then
+            log_info "自定义 Provider 已配置: $provider_id"
+        else
+            log_warn "python3 配置失败"
+        fi
     else
         log_warn "无法配置自定义 Provider（需要 node 或 python3）"
+    fi
+    
+    # 验证配置文件是否正确写入
+    if [ -f "$config_file" ]; then
+        if grep -q "$provider_id" "$config_file" 2>/dev/null; then
+            log_info "配置文件验证通过: $config_file"
+        else
+            log_warn "配置文件可能未正确写入，请检查: $config_file"
+        fi
     fi
 }
 
@@ -993,14 +1019,17 @@ test_api_connection() {
         local exit_code
         
         # 使用 timeout 命令（如果可用），否则直接运行
+        # 注意：添加 || true 防止 set -e 导致脚本退出
         if command -v timeout &> /dev/null; then
-            result=$(timeout 30 clawdbot agent --local --to "+1234567890" --message "回复 OK" 2>&1)
-            exit_code=$?
-            if [ $exit_code -eq 124 ]; then
+            result=$(timeout 30 clawdbot agent --local --to "+1234567890" --message "回复 OK" 2>&1) || true
+            exit_code=${PIPESTATUS[0]}
+            # 如果 exit_code 为空，从 $? 获取（兼容不同 shell）
+            [ -z "$exit_code" ] && exit_code=$?
+            if [ "$exit_code" = "124" ]; then
                 result="测试超时（30秒）"
             fi
         else
-            result=$(clawdbot agent --local --to "+1234567890" --message "回复 OK" 2>&1)
+            result=$(clawdbot agent --local --to "+1234567890" --message "回复 OK" 2>&1) || true
             exit_code=$?
         fi
         
