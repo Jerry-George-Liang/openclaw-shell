@@ -1576,51 +1576,48 @@ config_imessage() {
 
 # 飞书插件安装函数（通用）
 install_feishu_plugin() {
-    # 检查并安装飞书插件
-    echo -e "${YELLOW}检查飞书插件...${NC}"
-    local plugins=$(clawdbot plugins list 2>/dev/null | grep -i feishu || echo "")
+    # 飞书支持通过社区 npm 包实现
+    # 包名：@m1heng-clawd/feishu
     
-    if [ -z "$plugins" ]; then
-        echo ""
-        log_warn "未发现内置飞书插件，尝试安装社区插件..."
-        echo ""
-        
-        # 创建插件目录
-        mkdir -p ~/.clawdbot/plugins 2>/dev/null
-        
-        # 检查是否已有插件目录
-        if [ -d ~/.clawdbot/plugins/clawdbot-feishu ]; then
-            log_info "飞书插件目录已存在"
-        else
-            echo -e "${YELLOW}正在下载飞书插件...${NC}"
-            if command -v git &> /dev/null; then
-                local current_dir=$(pwd)
-                cd ~/.clawdbot/plugins
-                if git clone https://github.com/m1heng/clawdbot-feishu.git 2>/dev/null; then
-                    log_info "飞书插件下载成功"
-                    cd clawdbot-feishu
-                    npm install 2>/dev/null || true
-                else
-                    log_warn "插件下载失败，请手动安装"
-                    echo ""
-                    echo -e "${CYAN}手动安装命令:${NC}"
-                    echo "  cd ~/.clawdbot/plugins"
-                    echo "  git clone https://github.com/m1heng/clawdbot-feishu.git"
-                    echo "  cd clawdbot-feishu && npm install"
-                fi
-                cd "$current_dir"
-            else
-                log_error "未安装 git，无法自动下载插件"
-            fi
-        fi
-    else
-        log_info "发现飞书插件: $plugins"
+    echo -e "${YELLOW}安装飞书插件...${NC}"
+    echo ""
+    
+    # 检查是否已安装飞书插件
+    local installed=$(clawdbot plugins list 2>/dev/null | grep -i feishu || echo "")
+    
+    if [ -n "$installed" ]; then
+        log_info "飞书插件已安装: $installed"
+        return 0
     fi
     
-    # 启用飞书插件
+    echo -e "${CYAN}正在安装社区飞书插件 @m1heng-clawd/feishu ...${NC}"
     echo ""
-    echo -e "${YELLOW}启用飞书插件...${NC}"
-    clawdbot plugins enable feishu 2>/dev/null || true
+    
+    # 使用 clawdbot plugins install 安装
+    if clawdbot plugins install @m1heng-clawd/feishu 2>&1; then
+        echo ""
+        log_info "✅ 飞书插件安装成功！"
+        return 0
+    else
+        echo ""
+        log_warn "自动安装失败，尝试手动安装..."
+        echo ""
+        
+        # 尝试使用 npm 直接安装
+        if npm install -g @m1heng-clawd/feishu 2>/dev/null; then
+            log_info "✅ 飞书插件安装成功（npm）！"
+            return 0
+        else
+            log_error "插件安装失败"
+            echo ""
+            echo -e "${CYAN}请手动安装:${NC}"
+            echo "  clawdbot plugins install @m1heng-clawd/feishu"
+            echo "  # 或"
+            echo "  npm install -g @m1heng-clawd/feishu"
+            echo ""
+            return 1
+        fi
+    fi
 }
 
 config_feishu() {
@@ -1640,156 +1637,22 @@ config_feishu() {
         return
     fi
     
-    echo -e "${CYAN}请选择接入方式:${NC}"
+    echo -e "${CYAN}飞书接入说明:${NC}"
     echo ""
-    print_menu_item "1" "群组机器人 (推荐)" "🤖"
-    echo -e "      ${GREEN}✓ 无需企业资质，个人即可创建${NC}"
-    echo -e "      ${GREEN}✓ 配置简单，3分钟搞定${NC}"
-    echo -e "      ${YELLOW}• 仅在群组内工作${NC}"
+    echo -e "  ${WHITE}使用社区插件 @m1heng-clawd/feishu${NC}"
     echo ""
-    print_menu_item "2" "企业自建应用" "🏢"
-    echo -e "      ${YELLOW}• 需要企业资质认证${NC}"
-    echo -e "      ${YELLOW}• 配置较复杂${NC}"
-    echo -e "      ${GREEN}✓ 功能更全面${NC}"
+    echo -e "  ${GREEN}✓ 支持 WebSocket 连接（无需公网服务器）${NC}"
+    echo -e "  ${GREEN}✓ 支持私聊和群聊${NC}"
+    echo -e "  ${GREEN}✓ 支持图片、文件等多媒体${NC}"
     echo ""
-    print_menu_item "0" "返回上级菜单" "↩️"
-    echo ""
-    
-    read -p "$(echo -e "${YELLOW}请选择 [0-2]: ${NC}")" feishu_mode
-    
-    case $feishu_mode in
-        1) config_feishu_webhook ;;
-        2) config_feishu_app ;;
-        0) return ;;
-        *) log_error "无效选择"; press_enter; config_feishu ;;
-    esac
-}
-
-# 飞书群组机器人配置（Webhook 方式，推荐）
-config_feishu_webhook() {
-    clear_screen
-    print_header
-    
-    echo -e "${WHITE}🤖 飞书群组机器人配置 (推荐)${NC}"
-    print_divider
-    echo ""
-    
-    echo -e "${CYAN}配置步骤:${NC}"
-    echo ""
-    echo "  ${WHITE}第一步: 安装飞书插件${NC} (自动完成)"
-    echo "    • 脚本将自动下载并安装 clawdbot-feishu 插件"
-    echo ""
-    echo "  ${WHITE}第二步: 在飞书群组创建机器人${NC}"
-    echo "    1. 打开飞书群聊 → 设置 → 群机器人"
-    echo "    2. 添加机器人 → 自定义机器人"
-    echo "    3. 设置机器人名称和头像"
-    echo "    4. 复制 Webhook 地址"
-    echo ""
-    echo "  ${WHITE}第三步: 输入 Webhook 地址${NC}"
-    echo "    • 在此粘贴上一步获取的 Webhook URL"
+    echo -e "  ${YELLOW}⚠️ 需要在飞书开放平台创建企业自建应用${NC}"
     echo ""
     print_divider
     echo ""
     
-    if ! confirm "是否开始配置？"; then
-        press_enter
-        return
+    if confirm "是否开始配置飞书？"; then
+        config_feishu_app
     fi
-    
-    # ========== 第一步：安装插件 ==========
-    echo ""
-    echo -e "${WHITE}━━━ 第一步: 安装飞书插件 (自动) ━━━${NC}"
-    echo ""
-    
-    install_feishu_plugin
-    
-    echo ""
-    log_info "✅ 第一步完成！插件已就绪"
-    echo ""
-    
-    # ========== 第二步提示 ==========
-    echo -e "${WHITE}━━━ 第二步: 请在飞书群组创建机器人 ━━━${NC}"
-    echo ""
-    echo -e "${CYAN}请在飞书中完成以下操作:${NC}"
-    echo "  1. 打开任意飞书群聊"
-    echo "  2. 点击右上角 ··· → 设置 → 群机器人"
-    echo "  3. 添加机器人 → 自定义机器人"
-    echo "  4. 设置名称（如：ClawdBot）"
-    echo "  5. 安全设置保持默认即可"
-    echo "  6. ${WHITE}复制 Webhook 地址${NC}"
-    echo ""
-    
-    if ! confirm "已创建机器人并复制 Webhook 地址？"; then
-        press_enter
-        return
-    fi
-    
-    # ========== 第三步：输入配置 ==========
-    echo ""
-    echo -e "${WHITE}━━━ 第三步: 输入 Webhook 地址 ━━━${NC}"
-    echo ""
-    read -p "$(echo -e "${YELLOW}粘贴 Webhook URL: ${NC}")" feishu_webhook_url
-    
-    if [ -z "$feishu_webhook_url" ]; then
-        log_error "Webhook URL 不能为空"
-        press_enter
-        return
-    fi
-    
-    # 验证 URL 格式
-    if [[ ! "$feishu_webhook_url" =~ ^https://open\.feishu\.cn/open-apis/bot ]]; then
-        log_warn "URL 格式可能不正确，请确认是飞书 Webhook 地址"
-        if ! confirm "是否继续？"; then
-            press_enter
-            return
-        fi
-    fi
-    
-    echo ""
-    log_info "正在保存配置..."
-    
-    # 保存配置到环境变量文件
-    local env_file="$CLAWDBOT_ENV"
-    mkdir -p "$(dirname "$env_file")" 2>/dev/null
-    
-    # 追加或更新飞书配置
-    # 先移除旧的飞书配置
-    if [ -f "$env_file" ]; then
-        grep -v "^export FEISHU_" "$env_file" > "${env_file}.tmp" 2>/dev/null || true
-        mv "${env_file}.tmp" "$env_file" 2>/dev/null || true
-    fi
-    
-    # 添加新配置
-    echo "" >> "$env_file"
-    echo "# 飞书配置 (群组机器人)" >> "$env_file"
-    echo "export FEISHU_BOT_TYPE=webhook" >> "$env_file"
-    echo "export FEISHU_WEBHOOK_URL=\"$feishu_webhook_url\"" >> "$env_file"
-    
-    chmod 600 "$env_file" 2>/dev/null || true
-    log_info "配置已保存到: $env_file"
-    
-    # 尝试使用 clawdbot 命令添加渠道
-    clawdbot channels add --channel feishu --webhook "$feishu_webhook_url" 2>/dev/null || true
-    
-    echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${WHITE}✅ 飞书群组机器人配置完成！${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "Webhook: ${WHITE}${feishu_webhook_url:0:50}...${NC}"
-    echo ""
-    echo -e "${CYAN}📋 使用方式:${NC}"
-    echo "  • 在群组中 @机器人 或直接发消息"
-    echo "  • 机器人会自动回复"
-    echo ""
-    echo -e "${YELLOW}⚠️  重要: 需要重启 Gateway 才能生效！${NC}"
-    echo ""
-    
-    if confirm "是否现在重启 Gateway？" "y"; then
-        restart_gateway_for_channel
-    fi
-    
-    press_enter
 }
 
 # 飞书企业自建应用配置
@@ -1807,25 +1670,26 @@ config_feishu_app() {
     echo -e "${CYAN}配置步骤:${NC}"
     echo ""
     echo "  ${WHITE}第一步: 安装飞书插件${NC} (自动完成)"
-    echo "    • 脚本将自动下载并安装 clawdbot-feishu 插件"
+    echo "    • 安装社区插件 @m1heng-clawd/feishu"
     echo ""
     echo "  ${WHITE}第二步: 飞书开放平台创建应用${NC}"
     echo "    1. 访问 https://open.feishu.cn/"
-    echo "    2. 创建企业自建应用 → 机器人"
+    echo "    2. 创建企业自建应用 → 添加机器人能力"
     echo "    3. 获取 App ID 和 App Secret"
     echo ""
     echo "  ${WHITE}第三步: 配置机器人权限${NC}"
     echo "    • 权限管理 → 添加以下权限:"
-    echo "      - im:message.receive_v1 (接收消息)"
+    echo "      - contact:user.base:readonly (用户信息)"
+    echo "      - im:message (收发消息)"
     echo "      - im:message:send_as_bot (发送消息)"
-    echo "      - im:chat:readonly (读取会话信息)"
+    echo "      - im:resource (上传下载媒体)"
     echo ""
     echo "  ${WHITE}第四步: 输入配置信息${NC}"
-    echo "    • 在此输入 App ID、App Secret 等信息"
+    echo "    • 在此输入 App ID 和 App Secret"
     echo ""
     echo "  ${WHITE}第五步: 配置事件订阅${NC}"
-    echo "    • 事件订阅 → 请求地址:"
-    echo "      https://你的服务器:18789/channels/feishu/webhook"
+    echo "    • 事件配置 → 选择「长连接」(WebSocket)"
+    echo "    • 无需公网服务器，无需 Webhook 地址"
     echo "    • 添加事件: im.message.receive_v1"
     echo ""
     print_divider
@@ -1883,41 +1747,27 @@ config_feishu_app() {
     echo ""
     log_info "正在保存配置..."
     
-    # 配置飞书渠道
+    # 使用 clawdbot config set 命令配置飞书渠道
     echo -e "${YELLOW}配置飞书渠道...${NC}"
     
-    # 保存配置到环境变量文件
-    local env_file="$CLAWDBOT_ENV"
-    mkdir -p "$(dirname "$env_file")" 2>/dev/null
+    # 设置飞书配置
+    clawdbot config set channels.feishu.appId "$feishu_app_id" 2>/dev/null
+    clawdbot config set channels.feishu.appSecret "$feishu_app_secret" 2>/dev/null
+    clawdbot config set channels.feishu.enabled true 2>/dev/null
     
-    # 追加或更新飞书配置
-    # 先移除旧的飞书配置
-    if [ -f "$env_file" ]; then
-        grep -v "^export FEISHU_" "$env_file" > "${env_file}.tmp" 2>/dev/null || true
-        mv "${env_file}.tmp" "$env_file" 2>/dev/null || true
-    fi
+    # 设置连接模式为 WebSocket（推荐，无需公网服务器）
+    clawdbot config set channels.feishu.connectionMode "websocket" 2>/dev/null
     
-    # 添加新配置
-    echo "" >> "$env_file"
-    echo "# 飞书配置 (企业自建应用)" >> "$env_file"
-    echo "export FEISHU_BOT_TYPE=app" >> "$env_file"
-    echo "export FEISHU_APP_ID=\"$feishu_app_id\"" >> "$env_file"
-    echo "export FEISHU_APP_SECRET=\"$feishu_app_secret\"" >> "$env_file"
-    if [ -n "$feishu_verify_token" ]; then
-        echo "export FEISHU_VERIFY_TOKEN=\"$feishu_verify_token\"" >> "$env_file"
-    fi
-    if [ -n "$feishu_encrypt_key" ]; then
-        echo "export FEISHU_ENCRYPT_KEY=\"$feishu_encrypt_key\"" >> "$env_file"
-    fi
+    # 设置域名（国内用 feishu，国际用 lark）
+    clawdbot config set channels.feishu.domain "feishu" 2>/dev/null
     
-    chmod 600 "$env_file" 2>/dev/null || true
-    log_info "配置已保存到: $env_file"
+    # 设置群组策略
+    clawdbot config set channels.feishu.requireMention true 2>/dev/null
     
-    # 尝试使用 clawdbot 命令添加渠道
-    if clawdbot channels add --channel feishu --app-id "$feishu_app_id" --app-secret "$feishu_app_secret" 2>/dev/null; then
+    if [ $? -eq 0 ]; then
         log_info "飞书渠道配置成功！"
     else
-        log_warn "使用 clawdbot 命令配置失败，已保存到环境变量"
+        log_warn "部分配置可能失败，请检查"
     fi
     
     echo ""
@@ -1925,16 +1775,26 @@ config_feishu_app() {
     echo -e "${WHITE}✅ 第四步完成！企业应用配置已保存${NC}"
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "App ID: ${WHITE}${feishu_app_id:0:10}...${NC}"
+    echo -e "App ID: ${WHITE}${feishu_app_id:0:15}...${NC}"
+    echo -e "连接模式: ${WHITE}WebSocket（推荐）${NC}"
     echo ""
     echo -e "${WHITE}━━━ 第五步: 配置事件订阅 (请在飞书后台完成) ━━━${NC}"
     echo ""
     echo -e "${CYAN}📋 请在飞书开放平台完成最后配置:${NC}"
-    echo "  1. 事件订阅 → 请求地址:"
-    echo "     ${WHITE}https://你的服务器:18789/channels/feishu/webhook${NC}"
-    echo "  2. 添加事件: im.message.receive_v1"
-    echo "  3. 发布应用（或创建测试版本）"
-    echo "  4. 将机器人添加到群组，@机器人 开始对话"
+    echo ""
+    echo -e "  ${WHITE}事件配置方式: 选择「长连接」(推荐)${NC}"
+    echo "    • 无需公网服务器"
+    echo "    • 无需配置 Webhook 地址"
+    echo ""
+    echo "  ${WHITE}添加事件订阅:${NC}"
+    echo "    • im.message.receive_v1 (接收消息，必须)"
+    echo "    • im.message.message_read_v1 (已读回执)"
+    echo "    • im.chat.member.bot.added_v1 (机器人入群)"
+    echo ""
+    echo "  ${WHITE}发布应用:${NC}"
+    echo "    • 创建测试版本或正式发布"
+    echo "    • 将机器人添加到群组"
+    echo "    • @机器人 开始对话"
     echo ""
     echo -e "${YELLOW}⚠️  重要: 需要重启 Gateway 才能生效！${NC}"
     echo ""
