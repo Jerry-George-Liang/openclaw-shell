@@ -2133,7 +2133,7 @@ config.models.providers['$provider_id'] = {
             id: '$model',
             name: '$model',
             api: '$api_type',
-            input: ['text'],
+            input: ['text','image'],
             contextWindow: 200000,
             maxTokens: 8192
         }
@@ -2190,7 +2190,7 @@ config['models']['providers']['$provider_id'] = {
             'id': '$model',
             'name': '$model',
             'api': '$api_type',
-            'input': ['text'],
+            'input': ['text','image'],
             'contextWindow': 200000,
             'maxTokens': 8192
         }
