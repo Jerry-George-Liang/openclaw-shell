@@ -684,30 +684,54 @@ config_ai_model() {
     echo ""
     
     echo -e "${CYAN}选择 AI 提供商:${NC}"
-    echo -e "${GRAY}提示: Anthropic 支持自定义 API 地址（通过自定义 Provider 配置）${NC}"
+    echo -e "${GRAY}提示: 支持自定义 API 地址（通过自定义 Provider 配置）${NC}"
     echo ""
+    echo -e "${WHITE}主流服务商:${NC}"
     print_menu_item "1" "Anthropic Claude" "🟣"
     print_menu_item "2" "OpenAI GPT" "🟢"
-    print_menu_item "3" "Ollama 本地模型" "🟠"
-    print_menu_item "4" "OpenRouter (多模型网关)" "🔵"
-    print_menu_item "5" "Google Gemini" "🔴"
-    print_menu_item "6" "Azure OpenAI" "☁️"
+    print_menu_item "3" "Google Gemini" "🔴"
+    print_menu_item "4" "xAI Grok" "𝕏"
+    echo ""
+    echo -e "${WHITE}多模型网关:${NC}"
+    print_menu_item "5" "OpenRouter (多模型网关)" "🔵"
+    print_menu_item "6" "OpenCode (免费多模型)" "🆓"
+    echo ""
+    echo -e "${WHITE}快速推理:${NC}"
     print_menu_item "7" "Groq (超快推理)" "⚡"
     print_menu_item "8" "Mistral AI" "🌬️"
+    echo ""
+    echo -e "${WHITE}本地/企业:${NC}"
+    print_menu_item "9" "Ollama 本地模型" "🟠"
+    print_menu_item "10" "Azure OpenAI" "☁️"
+    echo ""
+    echo -e "${WHITE}国产模型:${NC}"
+    print_menu_item "11" "智谱 GLM (Zai)" "🇨🇳"
+    print_menu_item "12" "MiniMax" "🤖"
+    echo ""
+    echo -e "${WHITE}实验性:${NC}"
+    print_menu_item "13" "Google Gemini CLI" "🧪"
+    print_menu_item "14" "Google Antigravity" "🚀"
+    echo ""
     print_menu_item "0" "返回主菜单" "↩️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [0-8]: ${NC}")" choice
+    read -p "$(echo -e "${YELLOW}请选择 [0-14]: ${NC}")" choice
     
     case $choice in
         1) config_anthropic ;;
         2) config_openai ;;
-        3) config_ollama ;;
-        4) config_openrouter ;;
-        5) config_google_gemini ;;
-        6) config_azure_openai ;;
+        3) config_google_gemini ;;
+        4) config_xai ;;
+        5) config_openrouter ;;
+        6) config_opencode ;;
         7) config_groq ;;
         8) config_mistral ;;
+        9) config_ollama ;;
+        10) config_azure_openai ;;
+        11) config_zai ;;
+        12) config_minimax ;;
+        13) config_google_gemini_cli ;;
+        14) config_google_antigravity ;;
         0) return ;;
         *) log_error "无效选择"; press_enter; config_ai_model ;;
     esac
@@ -1177,6 +1201,387 @@ config_mistral() {
     echo ""
     if confirm "是否测试 API 连接？" "y"; then
         test_ai_connection "mistral" "$api_key" "$model" "$base_url"
+    fi
+    
+    press_enter
+}
+
+config_xai() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}𝕏 配置 xAI Grok${NC}"
+    print_divider
+    echo ""
+    
+    echo -e "${CYAN}xAI 是 Elon Musk 创立的 AI 公司，提供 Grok 系列模型${NC}"
+    echo -e "${GRAY}获取 API Key: https://console.x.ai/${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空"
+        press_enter
+        return
+    fi
+    
+    echo ""
+    echo -e "${CYAN}选择模型:${NC}"
+    echo ""
+    print_menu_item "1" "grok-4-fast (推荐，最新)" "⭐"
+    print_menu_item "2" "grok-4 (最强)" "👑"
+    print_menu_item "3" "grok-3-fast (快速)" "⚡"
+    print_menu_item "4" "grok-3-mini-fast (轻量)" "🪶"
+    print_menu_item "5" "grok-2-vision (视觉)" "👁️"
+    print_menu_item "6" "自定义模型名称" "✏️"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice
+    model_choice=${model_choice:-1}
+    
+    case $model_choice in
+        1) model="grok-4-fast" ;;
+        2) model="grok-4" ;;
+        3) model="grok-3-fast-latest" ;;
+        4) model="grok-3-mini-fast-latest" ;;
+        5) model="grok-2-vision-latest" ;;
+        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        *) model="grok-4-fast" ;;
+    esac
+    
+    # 保存到 ClawdBot 环境变量配置
+    save_clawdbot_ai_config "xai" "$api_key" "$model" ""
+    
+    echo ""
+    log_info "xAI Grok 配置完成！"
+    log_info "模型: $model"
+    
+    # 询问是否测试
+    echo ""
+    if confirm "是否测试 API 连接？" "y"; then
+        test_ai_connection "xai" "$api_key" "$model" ""
+    fi
+    
+    press_enter
+}
+
+config_zai() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}🇨🇳 配置智谱 GLM (Zai)${NC}"
+    print_divider
+    echo ""
+    
+    echo -e "${CYAN}智谱 AI 是中国领先的 AI 公司，提供 GLM 系列模型${NC}"
+    echo -e "${GRAY}获取 API Key: https://open.bigmodel.cn/${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空"
+        press_enter
+        return
+    fi
+    
+    echo ""
+    echo -e "${CYAN}选择模型:${NC}"
+    echo ""
+    print_menu_item "1" "glm-4.7 (推荐，最新)" "⭐"
+    print_menu_item "2" "glm-4.6 (上一代)" "📦"
+    print_menu_item "3" "glm-4.6v (视觉)" "👁️"
+    print_menu_item "4" "glm-4.5-flash (快速)" "⚡"
+    print_menu_item "5" "glm-4.5-air (轻量)" "🪶"
+    print_menu_item "6" "自定义模型名称" "✏️"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice
+    model_choice=${model_choice:-1}
+    
+    case $model_choice in
+        1) model="glm-4.7" ;;
+        2) model="glm-4.6" ;;
+        3) model="glm-4.6v" ;;
+        4) model="glm-4.5-flash" ;;
+        5) model="glm-4.5-air" ;;
+        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        *) model="glm-4.7" ;;
+    esac
+    
+    # 保存到 ClawdBot 环境变量配置
+    save_clawdbot_ai_config "zai" "$api_key" "$model" ""
+    
+    echo ""
+    log_info "智谱 GLM 配置完成！"
+    log_info "模型: $model"
+    
+    # 询问是否测试
+    echo ""
+    if confirm "是否测试 API 连接？" "y"; then
+        test_ai_connection "zai" "$api_key" "$model" ""
+    fi
+    
+    press_enter
+}
+
+config_minimax() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}🤖 配置 MiniMax${NC}"
+    print_divider
+    echo ""
+    
+    echo -e "${CYAN}MiniMax 是中国领先的 AI 公司，提供大语言模型服务${NC}"
+    echo -e "${GRAY}获取 API Key: https://platform.minimax.chat/${NC}"
+    echo ""
+    
+    echo -e "${YELLOW}选择区域:${NC}"
+    print_menu_item "1" "国际版 (minimax)" "🌍"
+    print_menu_item "2" "国内版 (minimax-cn)" "🇨🇳"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" region_choice
+    region_choice=${region_choice:-1}
+    
+    local provider="minimax"
+    if [ "$region_choice" = "2" ]; then
+        provider="minimax-cn"
+    fi
+    
+    echo ""
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空"
+        press_enter
+        return
+    fi
+    
+    echo ""
+    echo -e "${CYAN}选择模型:${NC}"
+    echo ""
+    print_menu_item "1" "MiniMax-M2.1 (推荐，最新)" "⭐"
+    print_menu_item "2" "MiniMax-M2 (上一代)" "📦"
+    print_menu_item "3" "自定义模型名称" "✏️"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-3] (默认: 1): ${NC}")" model_choice
+    model_choice=${model_choice:-1}
+    
+    case $model_choice in
+        1) model="MiniMax-M2.1" ;;
+        2) model="MiniMax-M2" ;;
+        3) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        *) model="MiniMax-M2.1" ;;
+    esac
+    
+    # 保存到 ClawdBot 环境变量配置
+    save_clawdbot_ai_config "$provider" "$api_key" "$model" ""
+    
+    echo ""
+    log_info "MiniMax 配置完成！"
+    log_info "区域: $provider"
+    log_info "模型: $model"
+    
+    # 询问是否测试
+    echo ""
+    if confirm "是否测试 API 连接？" "y"; then
+        test_ai_connection "$provider" "$api_key" "$model" ""
+    fi
+    
+    press_enter
+}
+
+config_opencode() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}🆓 配置 OpenCode${NC}"
+    print_divider
+    echo ""
+    
+    echo -e "${CYAN}OpenCode 是一个免费的多模型 API 网关${NC}"
+    echo -e "${GREEN}✓ 支持多种模型: Claude, GPT, Gemini, GLM 等${NC}"
+    echo -e "${GREEN}✓ 部分模型免费使用${NC}"
+    echo ""
+    echo -e "${GRAY}获取 API Key: https://opencode.ai/${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空"
+        press_enter
+        return
+    fi
+    
+    echo ""
+    echo -e "${CYAN}选择模型:${NC}"
+    echo ""
+    print_menu_item "1" "claude-sonnet-4-5 (推荐)" "⭐"
+    print_menu_item "2" "claude-opus-4-5 (最强)" "👑"
+    print_menu_item "3" "gpt-5 (GPT-5)" "🟢"
+    print_menu_item "4" "gemini-3-pro (Gemini 3)" "🔴"
+    print_menu_item "5" "glm-4.7-free (免费)" "🆓"
+    print_menu_item "6" "gpt-5-codex (代码)" "💻"
+    print_menu_item "7" "自定义模型名称" "✏️"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-7] (默认: 1): ${NC}")" model_choice
+    model_choice=${model_choice:-1}
+    
+    case $model_choice in
+        1) model="claude-sonnet-4-5" ;;
+        2) model="claude-opus-4-5" ;;
+        3) model="gpt-5" ;;
+        4) model="gemini-3-pro" ;;
+        5) model="glm-4.7-free" ;;
+        6) model="gpt-5-codex" ;;
+        7) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        *) model="claude-sonnet-4-5" ;;
+    esac
+    
+    # 保存到 ClawdBot 环境变量配置
+    save_clawdbot_ai_config "opencode" "$api_key" "$model" ""
+    
+    echo ""
+    log_info "OpenCode 配置完成！"
+    log_info "模型: $model"
+    
+    # 询问是否测试
+    echo ""
+    if confirm "是否测试 API 连接？" "y"; then
+        test_ai_connection "opencode" "$api_key" "$model" ""
+    fi
+    
+    press_enter
+}
+
+config_google_gemini_cli() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}🧪 配置 Google Gemini CLI${NC}"
+    print_divider
+    echo ""
+    
+    echo -e "${YELLOW}⚠️ 实验性功能${NC}"
+    echo ""
+    echo -e "${CYAN}Google Gemini CLI 提供最新的 Gemini 模型预览版${NC}"
+    echo -e "${GRAY}获取 API Key: https://aistudio.google.com/apikey${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空"
+        press_enter
+        return
+    fi
+    
+    echo ""
+    echo -e "${CYAN}选择模型:${NC}"
+    echo ""
+    print_menu_item "1" "gemini-3-pro-preview (推荐)" "⭐"
+    print_menu_item "2" "gemini-3-flash-preview (快速)" "⚡"
+    print_menu_item "3" "gemini-2.5-pro (稳定)" "📦"
+    print_menu_item "4" "gemini-2.5-flash (快速稳定)" "🚀"
+    print_menu_item "5" "gemini-2.0-flash" "⚡"
+    print_menu_item "6" "自定义模型名称" "✏️"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice
+    model_choice=${model_choice:-1}
+    
+    case $model_choice in
+        1) model="gemini-3-pro-preview" ;;
+        2) model="gemini-3-flash-preview" ;;
+        3) model="gemini-2.5-pro" ;;
+        4) model="gemini-2.5-flash" ;;
+        5) model="gemini-2.0-flash" ;;
+        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        *) model="gemini-3-pro-preview" ;;
+    esac
+    
+    # 保存到 ClawdBot 环境变量配置
+    save_clawdbot_ai_config "google-gemini-cli" "$api_key" "$model" ""
+    
+    echo ""
+    log_info "Google Gemini CLI 配置完成！"
+    log_info "模型: $model"
+    
+    # 询问是否测试
+    echo ""
+    if confirm "是否测试 API 连接？" "y"; then
+        test_ai_connection "google-gemini-cli" "$api_key" "$model" ""
+    fi
+    
+    press_enter
+}
+
+config_google_antigravity() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}🚀 配置 Google Antigravity${NC}"
+    print_divider
+    echo ""
+    
+    echo -e "${YELLOW}⚠️ 实验性功能${NC}"
+    echo ""
+    echo -e "${CYAN}Google Antigravity 是 Google 的实验性 AI 服务${NC}"
+    echo -e "${CYAN}提供多种顶级模型的访问${NC}"
+    echo -e "${GRAY}获取 API Key: 请联系 Google Cloud 获取访问权限${NC}"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}输入 API Key: ${NC}")" api_key
+    
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空"
+        press_enter
+        return
+    fi
+    
+    echo ""
+    echo -e "${CYAN}选择模型:${NC}"
+    echo ""
+    print_menu_item "1" "gemini-3-pro-high (推荐)" "⭐"
+    print_menu_item "2" "gemini-3-pro-low (快速)" "⚡"
+    print_menu_item "3" "gemini-3-flash (闪电)" "🔥"
+    print_menu_item "4" "claude-sonnet-4-5 (Claude)" "🟣"
+    print_menu_item "5" "claude-opus-4-5-thinking (思考)" "🧠"
+    print_menu_item "6" "gpt-oss-120b-medium (GPT)" "🟢"
+    print_menu_item "7" "自定义模型名称" "✏️"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-7] (默认: 1): ${NC}")" model_choice
+    model_choice=${model_choice:-1}
+    
+    case $model_choice in
+        1) model="gemini-3-pro-high" ;;
+        2) model="gemini-3-pro-low" ;;
+        3) model="gemini-3-flash" ;;
+        4) model="claude-sonnet-4-5" ;;
+        5) model="claude-opus-4-5-thinking" ;;
+        6) model="gpt-oss-120b-medium" ;;
+        7) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model ;;
+        *) model="gemini-3-pro-high" ;;
+    esac
+    
+    # 保存到 ClawdBot 环境变量配置
+    save_clawdbot_ai_config "google-antigravity" "$api_key" "$model" ""
+    
+    echo ""
+    log_info "Google Antigravity 配置完成！"
+    log_info "模型: $model"
+    
+    # 询问是否测试
+    echo ""
+    if confirm "是否测试 API 连接？" "y"; then
+        test_ai_connection "google-antigravity" "$api_key" "$model" ""
     fi
     
     press_enter
@@ -2165,7 +2570,7 @@ EOF
             echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
             [ -n "$base_url" ] && echo "export OPENAI_BASE_URL=$base_url" >> "$env_file"
             ;;
-        google)
+        google|google-gemini-cli|google-antigravity)
             echo "export GOOGLE_API_KEY=$api_key" >> "$env_file"
             [ -n "$base_url" ] && echo "export GOOGLE_BASE_URL=$base_url" >> "$env_file"
             ;;
@@ -2183,6 +2588,18 @@ EOF
             ;;
         ollama)
             echo "export OLLAMA_HOST=${base_url:-http://localhost:11434}" >> "$env_file"
+            ;;
+        xai)
+            echo "export XAI_API_KEY=$api_key" >> "$env_file"
+            ;;
+        zai)
+            echo "export ZAI_API_KEY=$api_key" >> "$env_file"
+            ;;
+        minimax|minimax-cn)
+            echo "export MINIMAX_API_KEY=$api_key" >> "$env_file"
+            ;;
+        opencode)
+            echo "export OPENCODE_API_KEY=$api_key" >> "$env_file"
             ;;
     esac
     
@@ -2218,6 +2635,27 @@ EOF
                     ;;
                 ollama)
                     clawdbot_model="ollama/$model"
+                    ;;
+                xai)
+                    clawdbot_model="xai/$model"
+                    ;;
+                zai)
+                    clawdbot_model="zai/$model"
+                    ;;
+                minimax)
+                    clawdbot_model="minimax/$model"
+                    ;;
+                minimax-cn)
+                    clawdbot_model="minimax-cn/$model"
+                    ;;
+                opencode)
+                    clawdbot_model="opencode/$model"
+                    ;;
+                google-gemini-cli)
+                    clawdbot_model="google-gemini-cli/$model"
+                    ;;
+                google-antigravity)
+                    clawdbot_model="google-antigravity/$model"
                     ;;
             esac
         fi

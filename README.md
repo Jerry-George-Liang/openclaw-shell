@@ -32,14 +32,31 @@
   <img src="photo/llm.png" alt="AI 模型配置" width="600">
 </p>
 
+**主流服务商:**
 - **Anthropic Claude** - Claude Opus 4 / Sonnet 4 / Haiku *(支持自定义 API 地址)*
 - **OpenAI GPT** - GPT-4o / GPT-4 Turbo / o1 *(支持自定义 API 地址)*
 - **Google Gemini** - Gemini 2.0 Flash / 1.5 Pro
-- **Ollama** - 本地部署，无需 API Key
+- **xAI Grok** - Grok 4 / Grok 3 / Grok 2 Vision *(Elon Musk 的 AI)*
+
+**多模型网关:**
 - **OpenRouter** - 多模型网关，一个 Key 用遍所有模型
+- **OpenCode** - 免费多模型 API，支持 Claude/GPT/Gemini/GLM
+
+**快速推理:**
 - **Groq** - 超快推理，Llama 3.3 / Mixtral
 - **Mistral AI** - Mistral Large / Codestral
+
+**本地/企业:**
+- **Ollama** - 本地部署，无需 API Key
 - **Azure OpenAI** - 企业级 Azure 部署
+
+**国产模型:**
+- **智谱 GLM (Zai)** - GLM-4.7 / GLM-4.6 *(中国领先 AI)*
+- **MiniMax** - MiniMax-M2 系列 *(支持国内/国际版)*
+
+**实验性:**
+- **Google Gemini CLI** - Gemini 3 预览版
+- **Google Antigravity** - Google 实验性多模型 API
 
 > 💡 **自定义 API 地址**: Anthropic Claude 和 OpenAI GPT 都支持自定义 API 地址，可接入 OneAPI/NewAPI/API 代理等服务。配置时先输入自定义地址，再输入 API Key。
 
