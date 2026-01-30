@@ -33,30 +33,19 @@
 </p>
 
 **主流服务商:**
-- **Anthropic Claude** - Claude Opus 4 / Sonnet 4 / Haiku *(支持自定义 API 地址)*
-- **OpenAI GPT** - GPT-4o / GPT-4 Turbo / o1 *(支持自定义 API 地址)*
-- **Google Gemini** - Gemini 2.0 Flash / 1.5 Pro
-- **xAI Grok** - Grok 4 / Grok 3 / Grok 2 Vision *(Elon Musk 的 AI)*
+- **Anthropic Claude** - claude-sonnet-4-5 / claude-opus-4-5 / claude-haiku-4-5 *(支持自定义 API 地址)*
+- **OpenAI GPT** - gpt-4o / gpt-4o-mini / gpt-4-turbo *(支持自定义 API 地址，需支持 v1/responses)*
+- **Google Gemini** - gemini-2.0-flash / gemini-1.5-pro / gemini-1.5-flash
 
 **多模型网关:**
-- **OpenRouter** - 多模型网关，一个 Key 用遍所有模型
-- **OpenCode** - 免费多模型 API，支持 Claude/GPT/Gemini/GLM
+- **OpenRouter** - 多模型网关，一个 Key 用遍所有模型 (claude-sonnet-4 / gpt-4o / gemini-pro-1.5)
 
 **快速推理:**
-- **Groq** - 超快推理，Llama 3.3 / Mixtral
-- **Mistral AI** - Mistral Large / Codestral
+- **Groq** - 超快推理，llama-3.3-70b-versatile / llama-3.1-8b-instant / mixtral-8x7b
+- **Mistral AI** - mistral-large-latest / mistral-small-latest / codestral-latest
 
-**本地/企业:**
-- **Ollama** - 本地部署，无需 API Key
-- **Azure OpenAI** - 企业级 Azure 部署
-
-**国产模型:**
-- **智谱 GLM (Zai)** - GLM-4.7 / GLM-4.6 *(中国领先 AI)*
-- **MiniMax** - MiniMax-M2 系列 *(支持国内/国际版)*
-
-**实验性:**
-- **Google Gemini CLI** - Gemini 3 预览版
-- **Google Antigravity** - Google 实验性多模型 API
+**本地部署:**
+- **Ollama** - 本地部署，无需 API Key (llama3 / llama3:70b / mistral)
 
 > 💡 **自定义 API 地址**: Anthropic Claude 和 OpenAI GPT 都支持自定义 API 地址，可接入 OneAPI/NewAPI/API 代理等服务。配置时先输入自定义地址，再输入 API Key。
 >
@@ -170,7 +159,7 @@ curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/c
 1. 在配置菜单中选择 Anthropic Claude
 2. **先输入自定义 API 地址**（留空使用官方 API）
 3. 输入 API Key（官方 Key 从 [Anthropic Console](https://console.anthropic.com/) 获取）
-4. 选择模型（推荐 Sonnet 4）
+4. 选择模型（推荐 claude-sonnet-4-5-20250929）
 
 > 💡 支持 OneAPI/NewAPI 等第三方代理服务，只需填入对应的 API 地址和 Key
 
@@ -209,6 +198,20 @@ ollama pull llama3
 2. 在配置菜单中选择 Google Gemini
 3. 输入 API Key
 4. 选择模型（推荐 gemini-2.0-flash）
+
+#### OpenRouter (多模型网关)
+
+1. 访问 [OpenRouter](https://openrouter.ai/) 获取 API Key
+2. 在配置菜单中选择 OpenRouter
+3. 输入 API Key
+4. 选择模型（推荐 anthropic/claude-sonnet-4）
+
+#### Mistral AI
+
+1. 访问 [Mistral Console](https://console.mistral.ai/) 获取 API Key
+2. 在配置菜单中选择 Mistral AI
+3. 输入 API Key
+4. 选择模型（推荐 mistral-large-latest）
 
 ### 配置 Telegram 机器人
 
