@@ -2006,6 +2006,19 @@ configure_custom_provider() {
     fi
     local provider_id="${provider}-custom"
     
+    # 检查是否存在旧配置，询问是否清理
+    local do_cleanup="false"
+    if [ -f "$config_file" ]; then
+        if grep -q "anthropic-custom\|openai-custom\|openai/claude" "$config_file" 2>/dev/null; then
+            echo ""
+            echo -e "${YELLOW}检测到旧的自定义配置，是否清理？${NC}"
+            echo -e "${GRAY}(清理可避免配置累积，推荐选择 Y)${NC}"
+            if confirm "清理旧配置？" "y"; then
+                do_cleanup="true"
+            fi
+        fi
+    fi
+    
     # 使用 node 或 python 来处理 JSON
     if command -v node &> /dev/null; then
         node -e "
@@ -2021,23 +2034,26 @@ try {
 if (!config.models) config.models = {};
 if (!config.models.providers) config.models.providers = {};
 
-// 清理旧的自定义 provider（避免累积）
-delete config.models.providers['anthropic-custom'];
-delete config.models.providers['openai-custom'];
+// 根据用户选择决定是否清理旧配置
+if ('$do_cleanup' === 'true') {
+    // 清理旧的自定义 provider（避免累积）
+    delete config.models.providers['anthropic-custom'];
+    delete config.models.providers['openai-custom'];
 
-// 清理旧的错误配置模型（如 openai/claude-* 等）
-if (config.models.configured) {
-    config.models.configured = config.models.configured.filter(m => {
-        // 保留正确的配置，删除错误的如 openai/claude-*
-        if (m.startsWith('openai/claude')) return false;
-        if (m.startsWith('openrouter/claude') && !m.includes('openrouter.ai')) return false;
-        return true;
-    });
-}
+    // 清理旧的错误配置模型（如 openai/claude-* 等）
+    if (config.models.configured) {
+        config.models.configured = config.models.configured.filter(m => {
+            if (m.startsWith('openai/claude')) return false;
+            if (m.startsWith('openrouter/claude') && !m.includes('openrouter.ai')) return false;
+            return true;
+        });
+    }
 
-// 清理旧的别名
-if (config.models.aliases) {
-    delete config.models.aliases['claude-custom'];
+    // 清理旧的别名
+    if (config.models.aliases) {
+        delete config.models.aliases['claude-custom'];
+    }
+    console.log('Old configurations cleaned up');
 }
 
 // 添加自定义 provider
@@ -2078,21 +2094,25 @@ if 'models' not in config:
 if 'providers' not in config['models']:
     config['models']['providers'] = {}
 
-# 清理旧的自定义 provider（避免累积）
-config['models']['providers'].pop('anthropic-custom', None)
-config['models']['providers'].pop('openai-custom', None)
+# 根据用户选择决定是否清理旧配置
+if '$do_cleanup' == 'true':
+    # 清理旧的自定义 provider（避免累积）
+    config['models']['providers'].pop('anthropic-custom', None)
+    config['models']['providers'].pop('openai-custom', None)
 
-# 清理旧的错误配置模型
-if 'configured' in config['models']:
-    config['models']['configured'] = [
-        m for m in config['models']['configured']
-        if not (m.startswith('openai/claude') or 
-                (m.startswith('openrouter/claude') and 'openrouter.ai' not in m))
-    ]
+    # 清理旧的错误配置模型
+    if 'configured' in config['models']:
+        config['models']['configured'] = [
+            m for m in config['models']['configured']
+            if not (m.startswith('openai/claude') or 
+                    (m.startswith('openrouter/claude') and 'openrouter.ai' not in m))
+        ]
 
-# 清理旧的别名
-if 'aliases' in config['models']:
-    config['models']['aliases'].pop('claude-custom', None)
+    # 清理旧的别名
+    if 'aliases' in config['models']:
+        config['models']['aliases'].pop('claude-custom', None)
+    
+    print('Old configurations cleaned up')
 
 config['models']['providers']['$provider_id'] = {
     'baseUrl': '$base_url',
