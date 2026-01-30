@@ -1884,10 +1884,17 @@ config_discord() {
                 log_warn "Discord 渠道可能已存在或配置失败"
             fi
             
+            # 设置 groupPolicy 为 mention（只响应 @ 机器人的消息）
+            echo -e "${YELLOW}设置消息响应策略...${NC}"
+            clawdbot config set channels.discord.groupPolicy mention 2>/dev/null || true
+            log_info "已设置为: 响应 @机器人 的消息"
+            
             echo ""
             echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
             echo -e "${WHITE}Discord 配置完成！${NC}"
             echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            echo -e "${CYAN}使用方式: 在频道中 @机器人 发送消息${NC}"
             echo ""
             echo -e "${YELLOW}⚠️  重要: 需要重启 Gateway 才能生效！${NC}"
             echo ""
