@@ -1744,6 +1744,21 @@ manage_service() {
                     log_info "已加载环境变量"
                 fi
                 
+                # 先验证配置是否有效
+                log_info "验证配置..."
+                local config_check=$(clawdbot doctor 2>&1 | head -5)
+                if echo "$config_check" | grep -qi "Config invalid"; then
+                    log_error "配置无效，请先修复配置"
+                    echo ""
+                    echo -e "${YELLOW}错误详情:${NC}"
+                    echo "$config_check" | head -10
+                    echo ""
+                    echo -e "${CYAN}建议运行: clawdbot doctor --fix${NC}"
+                    press_enter
+                    manage_service
+                    return
+                fi
+                
                 log_info "正在启动服务..."
                 
                 # 后台启动 Gateway（包含环境变量）
@@ -1757,8 +1772,17 @@ manage_service() {
                 if pgrep -f "clawdbot.*gateway" > /dev/null 2>&1; then
                     log_info "服务已在后台启动"
                     echo -e "${CYAN}日志文件: /tmp/clawdbot-gateway.log${NC}"
+                    # 显示最近的日志
+                    echo ""
+                    echo -e "${GRAY}最近日志:${NC}"
+                    tail -5 /tmp/clawdbot-gateway.log 2>/dev/null | sed 's/^/  /'
                 else
-                    log_error "启动失败，请查看日志"
+                    log_error "启动失败"
+                    echo ""
+                    echo -e "${YELLOW}错误日志:${NC}"
+                    tail -10 /tmp/clawdbot-gateway.log 2>/dev/null | sed 's/^/  /'
+                    echo ""
+                    echo -e "${CYAN}建议运行: clawdbot doctor --fix${NC}"
                 fi
             else
                 log_error "ClawdBot 未安装"
