@@ -3208,6 +3208,16 @@ print('Feishu config saved successfully')
     
     if [ "$config_success" = true ]; then
         log_info "飞书配置已保存到: $config_file"
+        
+        # 启用飞书渠道
+        echo ""
+        echo -e "${YELLOW}启用飞书渠道...${NC}"
+        if clawdbot doctor --fix 2>/dev/null; then
+            log_info "飞书渠道已启用"
+        else
+            log_warn "请手动运行: clawdbot doctor --fix"
+        fi
+        
         return 0
     else
         log_error "保存飞书配置失败（需要 node 或 python3）"
@@ -3235,13 +3245,21 @@ install_feishu_plugin() {
     echo ""
     
     # 使用 clawdbot plugins install 安装
-    if clawdbot plugins install @m1heng-clawd/feishu 2>&1; then
+    echo -e "${CYAN}正在安装...${NC}"
+    local install_output
+    install_output=$(clawdbot plugins install @m1heng-clawd/feishu 2>&1)
+    local install_exit=$?
+    
+    # 只显示关键信息，过滤掉 doctor 输出
+    echo "$install_output" | grep -v "Config invalid" | grep -v "Doctor" | grep -v "clawdbot doctor" | grep -v "^│" | grep -v "^├" | grep -v "^◇" | head -10
+    
+    if [ $install_exit -eq 0 ]; then
         echo ""
         log_info "✅ 飞书插件安装成功！"
         return 0
     else
         echo ""
-        log_warn "clawdbot安装失败，正在尝试npm安装@m1heng-clawd/feishu..."
+        log_warn "clawdbot 安装失败，正在尝试 npm 安装..."
         echo ""
         
         # 尝试使用 npm 直接安装
