@@ -3240,17 +3240,56 @@ install_feishu_plugin() {
     echo -e "${YELLOW}安装飞书插件...${NC}"
     echo ""
     
-    # 检查是否已安装飞书插件
+    # 先清理可能存在的无效 feishu 配置（避免 Config invalid 错误）
+    if [ -f "$CLAWDBOT_JSON" ]; then
+        if command -v node &> /dev/null; then
+            node -e "
+const fs = require('fs');
+try {
+    const config = JSON.parse(fs.readFileSync('$CLAWDBOT_JSON', 'utf8'));
+    let changed = false;
+    // 如果 feishu 渠道存在但插件未安装，暂时删除渠道配置
+    if (config.channels?.feishu) {
+        delete config.channels.feishu;
+        changed = true;
+    }
+    if (config.plugins?.entries?.feishu) {
+        delete config.plugins.entries.feishu;
+        changed = true;
+    }
+    if (changed) {
+        fs.writeFileSync('$CLAWDBOT_JSON', JSON.stringify(config, null, 2));
+        console.log('Cleared invalid feishu config');
+    }
+} catch (e) {}
+" 2>/dev/null
+        elif command -v python3 &> /dev/null; then
+            python3 -c "
+import json
+try:
+    with open('$CLAWDBOT_JSON', 'r') as f:
+        config = json.load(f)
+    changed = False
+    if 'channels' in config and 'feishu' in config['channels']:
+        del config['channels']['feishu']
+        changed = True
+    if 'plugins' in config and 'entries' in config['plugins'] and 'feishu' in config['plugins']['entries']:
+        del config['plugins']['entries']['feishu']
+        changed = True
+    if changed:
+        with open('$CLAWDBOT_JSON', 'w') as f:
+            json.dump(config, f, indent=2)
+        print('Cleared invalid feishu config')
+except: pass
+" 2>/dev/null
+        fi
+    fi
+    
+    # 检查是否已安装飞书插件（必须通过 clawdbot plugins 安装）
     local installed=$(clawdbot plugins list 2>/dev/null | grep -i feishu || echo "")
     
     if [ -n "$installed" ]; then
         log_info "飞书插件已安装: $installed"
-        return 0
-    fi
-    
-    # 检查 npm 全局包是否已安装
-    if npm list -g @m1heng-clawd/feishu 2>/dev/null | grep -q "@m1heng-clawd/feishu"; then
-        log_info "飞书插件已安装 (npm): @m1heng-clawd/feishu"
         return 0
     fi
     
@@ -3272,23 +3311,15 @@ install_feishu_plugin() {
         return 0
     else
         echo ""
-        log_warn "clawdbot 安装失败，正在尝试 npm 安装..."
+        log_warn "插件安装失败"
         echo ""
-        
-        # 尝试使用 npm 直接安装
-        if npm install -g @m1heng-clawd/feishu 2>/dev/null; then
-            log_info "✅ 飞书插件安装成功（npm）！"
-            return 0
-        else
-            log_error "插件安装失败"
-            echo ""
-            echo -e "${CYAN}请手动安装:${NC}"
-            echo "  clawdbot plugins install @m1heng-clawd/feishu"
-            echo "  # 或"
-            echo "  npm install -g @m1heng-clawd/feishu"
-            echo ""
-            return 1
-        fi
+        echo -e "${CYAN}请手动安装:${NC}"
+        echo "  clawdbot plugins install @m1heng-clawd/feishu"
+        echo ""
+        echo -e "${YELLOW}⚠️  注意: 必须使用 clawdbot plugins install 命令安装${NC}"
+        echo -e "${YELLOW}    npm install -g 无法正确注册插件${NC}"
+        echo ""
+        return 1
     fi
 }
 
