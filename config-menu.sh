@@ -3378,15 +3378,17 @@ config_feishu_app() {
         return
     fi
     
-    # ========== 第四步：输入配置 ==========
+    # ========== 第五步：输入配置并启动服务 ==========
     echo ""
-    echo -e "${WHITE}━━━ 第四步: 输入配置信息 ━━━${NC}"
+    echo -e "${WHITE}━━━ 第五步: 输入配置并启动服务 ━━━${NC}"
     echo ""
     echo -e "${CYAN}📝 使用长连接模式，只需要 App ID 和 App Secret${NC}"
     echo -e "${GRAY}   (无需 Verification Token 和 Encrypt Key)${NC}"
     echo ""
-    read -p "$(echo -e "${YELLOW}输入 App ID: ${NC}")" feishu_app_id
-    read -p "$(echo -e "${YELLOW}输入 App Secret: ${NC}")" feishu_app_secret
+    echo -en "${YELLOW}输入 App ID: ${NC}"
+    read feishu_app_id < "$TTY_INPUT"
+    echo -en "${YELLOW}输入 App Secret: ${NC}"
+    read feishu_app_secret < "$TTY_INPUT"
     
     if [ -z "$feishu_app_id" ] || [ -z "$feishu_app_secret" ]; then
         log_error "App ID 和 App Secret 不能为空"
