@@ -297,7 +297,7 @@ install_clawdbot() {
     
     # 使用 npm 全局安装
     log_info "正在从 npm 安装 ClawdBot..."
-    npm install -g clawdbot@$CLAWDBOT_VERSION
+    npm install -g clawdbot@$CLAWDBOT_VERSION --unsafe-perm
     
     # 验证安装
     if check_command clawdbot; then
