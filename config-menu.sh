@@ -3094,6 +3094,127 @@ config_imessage() {
     press_enter
 }
 
+# 保存飞书配置到 JSON 文件
+save_feishu_config() {
+    local app_id="$1"
+    local app_secret="$2"
+    local config_file="$CLAWDBOT_JSON"
+    
+    # 确保配置目录存在
+    mkdir -p "$(dirname "$config_file")" 2>/dev/null || true
+    
+    local config_success=false
+    
+    if command -v node &> /dev/null; then
+        log_info "使用 node 保存飞书配置..."
+        
+        # 将变量写入临时文件
+        local tmp_vars="/tmp/clawdbot_feishu_vars_$$.json"
+        cat > "$tmp_vars" << EOFVARS
+{
+    "config_file": "$config_file",
+    "app_id": "$app_id",
+    "app_secret": "$app_secret"
+}
+EOFVARS
+        
+        node -e "
+const fs = require('fs');
+const vars = JSON.parse(fs.readFileSync('$tmp_vars', 'utf8'));
+
+let config = {};
+try {
+    config = JSON.parse(fs.readFileSync(vars.config_file, 'utf8'));
+} catch (e) {
+    config = {};
+}
+
+// 确保 channels 结构存在
+if (!config.channels) config.channels = {};
+
+// 设置飞书配置
+config.channels.feishu = {
+    appId: vars.app_id,
+    appSecret: vars.app_secret,
+    enabled: true,
+    connectionMode: 'websocket',
+    domain: 'feishu',
+    requireMention: true
+};
+
+fs.writeFileSync(vars.config_file, JSON.stringify(config, null, 2));
+console.log('Feishu config saved successfully');
+" 2>&1
+        local node_exit=$?
+        rm -f "$tmp_vars" 2>/dev/null
+        
+        if [ $node_exit -eq 0 ]; then
+            config_success=true
+        fi
+    fi
+    
+    # 如果 node 失败，尝试 python3
+    if [ "$config_success" = false ] && command -v python3 &> /dev/null; then
+        log_info "使用 python3 保存飞书配置..."
+        
+        local tmp_vars="/tmp/clawdbot_feishu_vars_$$.json"
+        cat > "$tmp_vars" << EOFVARS
+{
+    "config_file": "$config_file",
+    "app_id": "$app_id",
+    "app_secret": "$app_secret"
+}
+EOFVARS
+        
+        python3 -c "
+import json
+import os
+
+with open('$tmp_vars', 'r') as f:
+    vars = json.load(f)
+
+config = {}
+config_file = vars['config_file']
+if os.path.exists(config_file):
+    try:
+        with open(config_file, 'r') as f:
+            config = json.load(f)
+    except:
+        config = {}
+
+if 'channels' not in config:
+    config['channels'] = {}
+
+config['channels']['feishu'] = {
+    'appId': vars['app_id'],
+    'appSecret': vars['app_secret'],
+    'enabled': True,
+    'connectionMode': 'websocket',
+    'domain': 'feishu',
+    'requireMention': True
+}
+
+with open(config_file, 'w') as f:
+    json.dump(config, f, indent=2)
+print('Feishu config saved successfully')
+" 2>&1
+        local py_exit=$?
+        rm -f "$tmp_vars" 2>/dev/null
+        
+        if [ $py_exit -eq 0 ]; then
+            config_success=true
+        fi
+    fi
+    
+    if [ "$config_success" = true ]; then
+        log_info "飞书配置已保存到: $config_file"
+        return 0
+    else
+        log_error "保存飞书配置失败（需要 node 或 python3）"
+        return 1
+    fi
+}
+
 # 飞书插件安装函数（通用）
 install_feishu_plugin() {
     # 飞书支持通过社区 npm 包实现
@@ -3276,27 +3397,13 @@ config_feishu_app() {
     echo ""
     log_info "正在保存配置..."
     
-    # 使用 clawdbot config set 命令配置飞书渠道
+    # 使用专用函数保存飞书配置到 JSON 文件
     echo -e "${YELLOW}配置飞书渠道...${NC}"
     
-    # 设置飞书配置
-    clawdbot config set channels.feishu.appId "$feishu_app_id" 2>/dev/null
-    clawdbot config set channels.feishu.appSecret "$feishu_app_secret" 2>/dev/null
-    clawdbot config set channels.feishu.enabled true 2>/dev/null
-    
-    # 设置连接模式为 WebSocket 长连接（无需公网服务器）
-    clawdbot config set channels.feishu.connectionMode "websocket" 2>/dev/null
-    
-    # 设置域名（国内用 feishu，国际用 lark）
-    clawdbot config set channels.feishu.domain "feishu" 2>/dev/null
-    
-    # 设置群组策略：需要 @机器人 才响应
-    clawdbot config set channels.feishu.requireMention true 2>/dev/null
-    
-    if [ $? -eq 0 ]; then
+    if save_feishu_config "$feishu_app_id" "$feishu_app_secret"; then
         log_info "飞书渠道配置成功！"
     else
-        log_warn "部分配置可能失败，请检查"
+        log_warn "配置保存失败，请检查"
     fi
     
     echo ""
@@ -4540,10 +4647,39 @@ quick_test_feishu() {
     local app_id=""
     local app_secret=""
     
-    # 尝试从已保存的配置中读取
-    if check_clawdbot_installed; then
-        app_id=$(clawdbot config get channels.feishu.appId 2>/dev/null | tr -d '"' | tr -d ' ')
-        app_secret=$(clawdbot config get channels.feishu.appSecret 2>/dev/null | tr -d '"' | tr -d ' ')
+    # 尝试从 JSON 配置文件中读取
+    if [ -f "$CLAWDBOT_JSON" ]; then
+        if command -v node &> /dev/null; then
+            app_id=$(node -e "
+try {
+    const config = JSON.parse(require('fs').readFileSync('$CLAWDBOT_JSON', 'utf8'));
+    console.log(config.channels?.feishu?.appId || '');
+} catch (e) { console.log(''); }
+" 2>/dev/null)
+            app_secret=$(node -e "
+try {
+    const config = JSON.parse(require('fs').readFileSync('$CLAWDBOT_JSON', 'utf8'));
+    console.log(config.channels?.feishu?.appSecret || '');
+} catch (e) { console.log(''); }
+" 2>/dev/null)
+        elif command -v python3 &> /dev/null; then
+            app_id=$(python3 -c "
+import json
+try:
+    with open('$CLAWDBOT_JSON', 'r') as f:
+        config = json.load(f)
+    print(config.get('channels', {}).get('feishu', {}).get('appId', ''))
+except: print('')
+" 2>/dev/null)
+            app_secret=$(python3 -c "
+import json
+try:
+    with open('$CLAWDBOT_JSON', 'r') as f:
+        config = json.load(f)
+    print(config.get('channels', {}).get('feishu', {}).get('appSecret', ''))
+except: print('')
+" 2>/dev/null)
+        fi
     fi
     
     if [ -n "$app_id" ] && [ -n "$app_secret" ]; then
