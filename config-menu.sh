@@ -3098,229 +3098,39 @@ config_imessage() {
     press_enter
 }
 
-# 保存飞书配置到 JSON 文件
+# 保存飞书配置（使用 clawdbot 原生命令）
 save_feishu_config() {
     local app_id="$1"
     local app_secret="$2"
-    local config_file="$CLAWDBOT_JSON"
     
-    # 确保配置目录存在
-    mkdir -p "$(dirname "$config_file")" 2>/dev/null || true
+    echo -e "${YELLOW}添加飞书渠道...${NC}"
     
-    local config_success=false
-    
-    if command -v node &> /dev/null; then
-        log_info "使用 node 保存飞书配置..."
-        
-        # 将变量写入临时文件
-        local tmp_vars="/tmp/clawdbot_feishu_vars_$$.json"
-        cat > "$tmp_vars" << EOFVARS
-{
-    "config_file": "$config_file",
-    "app_id": "$app_id",
-    "app_secret": "$app_secret"
-}
-EOFVARS
-        
-        node -e "
-const fs = require('fs');
-const vars = JSON.parse(fs.readFileSync('$tmp_vars', 'utf8'));
-
-let config = {};
-try {
-    config = JSON.parse(fs.readFileSync(vars.config_file, 'utf8'));
-} catch (e) {
-    config = {};
-}
-
-// 确保 channels 结构存在
-if (!config.channels) config.channels = {};
-
-// 设置飞书配置
-config.channels.feishu = {
-    appId: vars.app_id,
-    appSecret: vars.app_secret,
-    enabled: true,
-    connectionMode: 'websocket',
-    domain: 'feishu',
-    requireMention: true
-};
-
-fs.writeFileSync(vars.config_file, JSON.stringify(config, null, 2));
-console.log('Feishu config saved successfully');
-" 2>&1
-        local node_exit=$?
-        rm -f "$tmp_vars" 2>/dev/null
-        
-        if [ $node_exit -eq 0 ]; then
-            config_success=true
-        fi
+    # 使用 clawdbot channels add 添加飞书渠道
+    if ! clawdbot channels add --channel feishu 2>/dev/null; then
+        log_warn "飞书渠道可能已存在，继续配置..."
     fi
     
-    # 如果 node 失败，尝试 python3
-    if [ "$config_success" = false ] && command -v python3 &> /dev/null; then
-        log_info "使用 python3 保存飞书配置..."
-        
-        local tmp_vars="/tmp/clawdbot_feishu_vars_$$.json"
-        cat > "$tmp_vars" << EOFVARS
-{
-    "config_file": "$config_file",
-    "app_id": "$app_id",
-    "app_secret": "$app_secret"
-}
-EOFVARS
-        
-        python3 -c "
-import json
-import os
-
-with open('$tmp_vars', 'r') as f:
-    vars = json.load(f)
-
-config = {}
-config_file = vars['config_file']
-if os.path.exists(config_file):
-    try:
-        with open(config_file, 'r') as f:
-            config = json.load(f)
-    except:
-        config = {}
-
-if 'channels' not in config:
-    config['channels'] = {}
-
-config['channels']['feishu'] = {
-    'appId': vars['app_id'],
-    'appSecret': vars['app_secret'],
-    'enabled': True,
-    'connectionMode': 'websocket',
-    'domain': 'feishu',
-    'requireMention': True
-}
-
-with open(config_file, 'w') as f:
-    json.dump(config, f, indent=2)
-print('Feishu config saved successfully')
-" 2>&1
-        local py_exit=$?
-        rm -f "$tmp_vars" 2>/dev/null
-        
-        if [ $py_exit -eq 0 ]; then
-            config_success=true
-        fi
-    fi
-    
-    if [ "$config_success" = true ]; then
-        log_info "飞书配置已保存到: $config_file"
-        
-        # 启用飞书渠道
-        echo ""
-        echo -e "${YELLOW}启用飞书渠道...${NC}"
-        
-        # 先启用 feishu 插件
-        clawdbot plugins enable feishu > /dev/null 2>&1 || true
-        
-        # 使用 yes 管道自动确认修复
-        yes | clawdbot doctor --fix > /dev/null 2>&1 || true
-        
-        log_info "飞书渠道已启用"
-        
-        return 0
-    else
-        log_error "保存飞书配置失败（需要 node 或 python3）"
+    # 使用 clawdbot config set 设置凭证
+    echo -e "${YELLOW}配置 App ID...${NC}"
+    if ! clawdbot config set channels.feishu.appId "$app_id" 2>/dev/null; then
+        log_error "设置 App ID 失败"
         return 1
     fi
-}
-
-# 飞书插件安装函数（通用）
-install_feishu_plugin() {
-    # 飞书支持通过社区 npm 包实现
-    # 包名：@m1heng-clawd/feishu
     
-    echo -e "${YELLOW}安装飞书插件...${NC}"
-    echo ""
-    
-    # 先清理可能存在的无效 feishu 配置（避免 Config invalid 错误）
-    if [ -f "$CLAWDBOT_JSON" ]; then
-        if command -v node &> /dev/null; then
-            node -e "
-const fs = require('fs');
-try {
-    const config = JSON.parse(fs.readFileSync('$CLAWDBOT_JSON', 'utf8'));
-    let changed = false;
-    // 如果 feishu 渠道存在但插件未安装，暂时删除渠道配置
-    if (config.channels?.feishu) {
-        delete config.channels.feishu;
-        changed = true;
-    }
-    if (config.plugins?.entries?.feishu) {
-        delete config.plugins.entries.feishu;
-        changed = true;
-    }
-    if (changed) {
-        fs.writeFileSync('$CLAWDBOT_JSON', JSON.stringify(config, null, 2));
-        console.log('Cleared invalid feishu config');
-    }
-} catch (e) {}
-" 2>/dev/null
-        elif command -v python3 &> /dev/null; then
-            python3 -c "
-import json
-try:
-    with open('$CLAWDBOT_JSON', 'r') as f:
-        config = json.load(f)
-    changed = False
-    if 'channels' in config and 'feishu' in config['channels']:
-        del config['channels']['feishu']
-        changed = True
-    if 'plugins' in config and 'entries' in config['plugins'] and 'feishu' in config['plugins']['entries']:
-        del config['plugins']['entries']['feishu']
-        changed = True
-    if changed:
-        with open('$CLAWDBOT_JSON', 'w') as f:
-            json.dump(config, f, indent=2)
-        print('Cleared invalid feishu config')
-except: pass
-" 2>/dev/null
-        fi
-    fi
-    
-    # 检查是否已安装飞书插件（必须通过 clawdbot plugins 安装）
-    local installed=$(clawdbot plugins list 2>/dev/null | grep -i feishu || echo "")
-    
-    if [ -n "$installed" ]; then
-        log_info "飞书插件已安装: $installed"
-        return 0
-    fi
-    
-    echo -e "${CYAN}正在安装社区飞书插件 @m1heng-clawd/feishu ...${NC}"
-    echo ""
-    
-    # 使用 clawdbot plugins install 安装
-    echo -e "${CYAN}正在安装...${NC}"
-    local install_output
-    install_output=$(clawdbot plugins install @m1heng-clawd/feishu 2>&1)
-    local install_exit=$?
-    
-    # 只显示关键信息，过滤掉 doctor 输出
-    echo "$install_output" | grep -v "Config invalid" | grep -v "Doctor" | grep -v "clawdbot doctor" | grep -v "^│" | grep -v "^├" | grep -v "^◇" | head -10
-    
-    if [ $install_exit -eq 0 ]; then
-        echo ""
-        log_info "✅ 飞书插件安装成功！"
-        return 0
-    else
-        echo ""
-        log_warn "插件安装失败"
-        echo ""
-        echo -e "${CYAN}请手动安装:${NC}"
-        echo "  clawdbot plugins install @m1heng-clawd/feishu"
-        echo ""
-        echo -e "${YELLOW}⚠️  注意: 必须使用 clawdbot plugins install 命令安装${NC}"
-        echo -e "${YELLOW}    npm install -g 无法正确注册插件${NC}"
-        echo ""
+    echo -e "${YELLOW}配置 App Secret...${NC}"
+    if ! clawdbot config set channels.feishu.appSecret "$app_secret" 2>/dev/null; then
+        log_error "设置 App Secret 失败"
         return 1
     fi
+    
+    # 设置其他默认配置
+    clawdbot config set channels.feishu.enabled true 2>/dev/null || true
+    clawdbot config set channels.feishu.connectionMode websocket 2>/dev/null || true
+    clawdbot config set channels.feishu.domain feishu 2>/dev/null || true
+    clawdbot config set channels.feishu.requireMention true 2>/dev/null || true
+    
+    log_info "飞书渠道配置完成"
+    return 0
 }
 
 config_feishu() {
@@ -3409,15 +3219,16 @@ config_feishu_app() {
         return
     fi
     
-    # ========== 第一步：安装插件 ==========
+    # ========== 第一步：检查环境 ==========
     echo ""
-    echo -e "${WHITE}━━━ 第一步: 安装飞书插件 (自动) ━━━${NC}"
+    echo -e "${WHITE}━━━ 第一步: 检查环境 (自动) ━━━${NC}"
     echo ""
     
-    install_feishu_plugin
+    # ClawdBot 原生支持飞书，无需安装额外插件
+    log_info "✅ ClawdBot 原生支持飞书渠道"
     
     echo ""
-    log_info "✅ 第一步完成！插件已就绪"
+    log_info "✅ 第一步完成！环境已就绪"
     echo ""
     
     # ========== 第二、三步提示 ==========
