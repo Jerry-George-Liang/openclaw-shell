@@ -1,15 +1,15 @@
 # 🔷 飞书机器人配置指南
 
-本文档详细介绍如何配置 ClawdBot 的飞书消息渠道。
+本文档详细介绍如何配置 OpenClaw 的飞书消息渠道。
 
 ## 📋 前置要求
 
-- 已安装 ClawdBot（运行 `install.sh` 完成安装）
+- 已安装 OpenClaw（运行 `install.sh` 完成安装）
 - 飞书账号（个人账号即可，无需企业认证）
 
 ## ✨ 特性说明
 
-ClawdBot 飞书渠道具有以下特性：
+OpenClaw 飞书渠道具有以下特性：
 
 - ✅ **无需公网服务器** - 使用 WebSocket 长连接模式
 - ✅ **无需企业认证** - 个人账号即可创建"企业自建应用"
@@ -23,7 +23,7 @@ ClawdBot 飞书渠道具有以下特性：
 1. 访问 [飞书开放平台](https://open.feishu.cn/)
 2. 登录后点击右上角「创建应用」
 3. 选择「企业自建应用」（个人账号也可以创建）
-4. 填写应用名称（如 "ClawdBot"）和描述
+4. 填写应用名称（如 "OpenClaw"）和描述
 
 ### 第二步：添加机器人能力
 
@@ -64,12 +64,12 @@ ClawdBot 飞书渠道具有以下特性：
 
 > 💡 内部应用通常会自动审核通过，无需等待。
 
-### 第六步：在 ClawdBot 中配置飞书
+### 第六步：在 OpenClaw 中配置飞书
 
 运行配置菜单：
 
 ```bash
-bash ~/.clawdbot/config-menu.sh
+bash ~/.openclaw/config-menu.sh
 ```
 
 1. 选择 `[3] 消息渠道配置`
@@ -79,7 +79,7 @@ bash ~/.clawdbot/config-menu.sh
 
 ### 第七步：配置事件订阅（长连接）
 
-> ⚠️ **重要**: 此步骤需要 ClawdBot 服务已启动，否则无法保存长连接设置。
+> ⚠️ **重要**: 此步骤需要 OpenClaw 服务已启动，否则无法保存长连接设置。
 
 1. 回到飞书开放平台，进入应用详情
 2. 点击左侧菜单「事件与回调」
@@ -116,7 +116,7 @@ bash ~/.clawdbot/config-menu.sh
 ### 方法一：使用配置菜单测试
 
 ```bash
-bash ~/.clawdbot/config-menu.sh
+bash ~/.openclaw/config-menu.sh
 ```
 
 1. 选择 `[7] 快速测试`
@@ -142,21 +142,21 @@ bash ~/.clawdbot/config-menu.sh
 
 ### Q: 长连接保存失败？
 
-**A**: 确保 ClawdBot 服务已启动。飞书后台需要检测到客户端连接才能保存长连接设置。
+**A**: 确保 OpenClaw 服务已启动。飞书后台需要检测到客户端连接才能保存长连接设置。
 
 ```bash
 # 启动服务
-clawdbot gateway start
+openclaw gateway start
 
 # 查看状态
-clawdbot gateway status
+openclaw gateway status
 ```
 
 ### Q: 机器人不回复消息？
 
 检查以下几点：
 
-1. **服务是否运行**: `clawdbot gateway status`
+1. **服务是否运行**: `openclaw gateway status`
 2. **事件订阅是否配置**: 确保添加了 `im.message.receive_v1` 事件
 3. **权限是否完整**: 确保添加了 `im:message` 和 `im:message:send_as_bot` 权限
 4. **应用是否发布**: 未发布的应用无法正常使用
@@ -176,10 +176,10 @@ clawdbot gateway status
 
 ```bash
 # 查看实时日志
-clawdbot logs --follow
+openclaw logs --follow
 
 # 运行诊断
-clawdbot doctor
+openclaw doctor
 ```
 
 ## 🔧 高级配置
@@ -190,7 +190,7 @@ clawdbot doctor
 
 ```bash
 # 设置不需要 @机器人 也响应（谨慎使用）
-clawdbot config set channels.feishu.requireMention false
+openclaw config set channels.feishu.requireMention false
 ```
 
 ### 切换到国际版 Lark
@@ -198,16 +198,16 @@ clawdbot config set channels.feishu.requireMention false
 如使用国际版 Lark 而非飞书：
 
 ```bash
-clawdbot config set channels.feishu.domain "lark"
+openclaw config set channels.feishu.domain "lark"
 ```
 
 ## 📚 相关链接
 
 - [飞书开放平台](https://open.feishu.cn/)
 - [飞书开放平台文档](https://open.feishu.cn/document/)
-- [ClawdBot 主仓库](https://github.com/clawdbot/clawdbot)
-- [安装工具仓库](https://github.com/miaoxworld/ClawdBotInstaller)
+- [OpenClaw 主仓库](https://github.com/openclaw/openclaw)
+- [安装工具仓库](https://github.com/miaoxworld/OpenClawInstaller)
 
 ---
 
-如有问题，请在 [GitHub Issues](https://github.com/miaoxworld/ClawdBotInstaller/issues) 中反馈。
+如有问题，请在 [GitHub Issues](https://github.com/miaoxworld/OpenClawInstaller/issues) 中反馈。

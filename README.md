@@ -1,4 +1,4 @@
-# 🦞 ClawdBot 一键部署工具
+# 🦞 OpenClaw 一键部署工具
 
 <p align="center">
   <img src="https://img.shields.io/badge/Version-1.0.0-blue.svg" alt="Version">
@@ -6,10 +6,10 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
 </p>
 
-> 🚀 一键部署你的私人 AI 助手 ClawdBot，支持多平台多模型配置
+> 🚀 一键部署你的私人 AI 助手 OpenClaw，支持多平台多模型配置
 
 <p align="center">
-  <img src="photo/menu.png" alt="ClawdBot 配置中心" width="600">
+  <img src="photo/menu.png" alt="OpenClaw 配置中心" width="600">
 </p>
 
 ## 📖 目录
@@ -38,23 +38,23 @@
 ### 方式一：一键安装（推荐）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/miaoxworld/OpenClawInstaller/main/install.sh | bash
 ```
 
 安装脚本会自动：
 1. 检测系统环境并安装依赖
-2. 安装 ClawdBot
+2. 安装 OpenClaw
 3. 引导完成核心配置（AI模型、身份信息）
 4. 测试 API 连接
-5. **自动启动 ClawdBot 服务**
+5. **自动启动 OpenClaw 服务**
 6. 可选打开配置菜单进行详细配置（渠道等）
 
 ### 方式二：手动安装
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/miaoxworld/ClawdBotInstaller.git
-cd ClawdBotInstaller
+git clone https://github.com/miaoxworld/OpenClawInstaller.git
+cd OpenClawInstaller
 
 # 2. 添加执行权限
 chmod +x install.sh config-menu.sh
@@ -63,30 +63,30 @@ chmod +x install.sh config-menu.sh
 ./install.sh
 
 #如果mac有权限问题，可以手动安装clawbot之后再运行install
-npm install -g clawdbot
+npm install -g openclaw
 ```
 
 ### 安装完成后
 
 安装完成后脚本会：
 1. **自动询问是否启动服务**（推荐选择 Y）
-2. 后台启动 ClawdBot Gateway
+2. 后台启动 OpenClaw Gateway
 3. 可选打开配置菜单进行渠道配置
 
 如果需要后续管理：
 
 ```bash
 # 手动启动服务
-source ~/.clawdbot/env && clawdbot gateway
+source ~/.openclaw/env && openclaw gateway
 
 # 后台启动服务
-clawdbot gateway start
+openclaw gateway start
 
 # 运行配置菜单进行详细配置
-bash ~/.clawdbot/config-menu.sh
+bash ~/.openclaw/config-menu.sh
 
 # 或从 GitHub 下载运行
-curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/config-menu.sh | bash
+curl -fsSL https://raw.githubusercontent.com/miaoxworld/OpenClawInstaller/main/config-menu.sh | bash
 ```
 
 ## ✨ 功能特性
@@ -138,7 +138,7 @@ curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/c
 
 - API 连接测试
 - 渠道连接验证
-- ClawdBot 诊断工具
+- OpenClaw 诊断工具
 
 ### 🧠 核心能力
 - **持久记忆** - 跨对话、跨平台的长期记忆
@@ -221,7 +221,7 @@ curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/c
 
 > 📖 **详细文档**: 查看 [飞书机器人配置指南](docs/feishu-setup.md) 获取完整的配置说明和常见问题解答。
 
-> 💡 **无需公网服务器**：ClawdBot 使用飞书的 WebSocket 长连接模式接收事件，无需配置 Webhook 地址。
+> 💡 **无需公网服务器**：OpenClaw 使用飞书的 WebSocket 长连接模式接收事件，无需配置 Webhook 地址。
 
 1. 访问 [飞书开放平台](https://open.feishu.cn/)
 2. 创建企业自建应用（个人账号即可，无需企业认证）
@@ -234,17 +234,17 @@ curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/c
    - `im:message:send_as_bot` (发送消息)
    - `im:chat:readonly` (读取会话信息)
 6. 发布应用：版本管理与发布 → 创建版本 → 发布
-7. **在配置菜单中配置飞书**：输入 App ID 和 App Secret，启动 ClawdBot 服务
+7. **在配置菜单中配置飞书**：输入 App ID 和 App Secret，启动 OpenClaw 服务
 8. 配置"事件订阅"（使用长连接）：
    - 进入：事件与回调 → 选择「**使用长连接接收事件**」
    - 添加事件：`im.message.receive_v1`（接收消息）
    - **无需填写 Webhook 地址**
-   - ⚠️ **注意**：需要 ClawdBot 服务已启动，才能保存长连接设置
+   - ⚠️ **注意**：需要 OpenClaw 服务已启动，才能保存长连接设置
 9. 添加机器人到群组：群设置 → 群机器人 → 添加机器人
 
 ### 配置 WhatsApp
 
-> 💡 **无需 Business API**：ClawdBot 通过扫码登录你的 WhatsApp 账号，无需申请 Business API。
+> 💡 **无需 Business API**：OpenClaw 通过扫码登录你的 WhatsApp 账号，无需申请 Business API。
 
 1. 在配置菜单中选择 `[3] 消息渠道配置` → `[3] WhatsApp`
 2. 系统会自动启用 WhatsApp 插件
@@ -260,72 +260,72 @@ curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/c
 
 ```bash
 # 启动服务（后台守护进程）
-clawdbot gateway start
+openclaw gateway start
 
 # 停止服务
-clawdbot gateway stop
+openclaw gateway stop
 
 # 重启服务
-clawdbot gateway restart
+openclaw gateway restart
 
 # 查看服务状态
-clawdbot gateway status
+openclaw gateway status
 
 # 前台运行（用于调试）
-clawdbot gateway
+openclaw gateway
 
 # 查看日志
-clawdbot logs
+openclaw logs
 
 # 实时日志
-clawdbot logs --follow
+openclaw logs --follow
 ```
 
 ### 配置管理
 
 ```bash
 # 打开配置文件
-clawdbot config
+openclaw config
 
 # 运行配置向导
-clawdbot onboard
+openclaw onboard
 
 # 诊断配置问题
-clawdbot doctor
+openclaw doctor
 
 # 健康检查
-clawdbot health
+openclaw health
 ```
 
 ### 数据管理
 
 ```bash
 # 导出对话历史
-clawdbot export --format json
+openclaw export --format json
 
 # 清理记忆
-clawdbot memory clear
+openclaw memory clear
 
 # 备份数据
-clawdbot backup
+openclaw backup
 ```
 
 ## 📋 配置说明
 
-ClawdBot 使用以下配置方式：
+OpenClaw 使用以下配置方式：
 
-- **环境变量**: `~/.clawdbot/env` - 存储 API Key 和 Base URL
-- **ClawdBot 配置**: `~/.clawdbot/clawdbot.json` - ClawdBot 内部配置（自动管理）
-- **命令行工具**: `clawdbot config set` / `clawdbot models set` 等
+- **环境变量**: `~/.openclaw/env` - 存储 API Key 和 Base URL
+- **OpenClaw 配置**: `~/.openclaw/openclaw.json` - OpenClaw 内部配置（自动管理）
+- **命令行工具**: `openclaw config set` / `openclaw models set` 等
 
 > 💡 **注意**：配置主要通过安装向导或 `config-menu.sh` 完成，无需手动编辑配置文件
 
 ### 环境变量配置示例
 
-`~/.clawdbot/env` 文件内容：
+`~/.openclaw/env` 文件内容：
 
 ```bash
-# ClawdBot 环境变量配置
+# OpenClaw 环境变量配置
 export ANTHROPIC_API_KEY=sk-ant-xxxxx
 export ANTHROPIC_BASE_URL=https://your-api-proxy.com  # 可选，自定义 API 地址
 
@@ -336,7 +336,7 @@ export OPENAI_BASE_URL=https://your-api-proxy.com/v1  # 可选
 
 ### 自定义 Provider 配置
 
-当使用自定义 API 地址时，安装脚本会自动在 `~/.clawdbot/clawdbot.json` 中配置自定义 Provider：
+当使用自定义 API 地址时，安装脚本会自动在 `~/.openclaw/openclaw.json` 中配置自定义 Provider：
 
 ```json
 {
@@ -364,16 +364,16 @@ export OPENAI_BASE_URL=https://your-api-proxy.com/v1  # 可选
 ### 目录结构
 
 ```
-~/.clawdbot/
-├── clawdbot.json        # ClawdBot 核心配置
+~/.openclaw/
+├── openclaw.json        # OpenClaw 核心配置
 ├── env                  # 环境变量 (API Key 等)
 ├── backups/             # 配置备份
-└── logs/                # 日志文件 (由 ClawdBot 管理)
+└── logs/                # 日志文件 (由 OpenClaw 管理)
 ```
 
 ## 🛡️ 安全建议
 
-> ⚠️ **重要警告**：ClawdBot 需要完全的计算机权限，请务必注意安全！
+> ⚠️ **重要警告**：OpenClaw 需要完全的计算机权限，请务必注意安全！
 
 ### 部署建议
 
@@ -433,8 +433,8 @@ sudo apt-get install -y nodejs
 ### Q: 启动后无法连接？
 
 1. 检查配置文件是否正确
-2. 运行诊断命令：`clawdbot doctor`
-3. 查看日志：`clawdbot logs`
+2. 运行诊断命令：`openclaw doctor`
+3. 查看日志：`openclaw logs`
 
 ### Q: Telegram 机器人没有响应？
 
@@ -446,34 +446,34 @@ sudo apt-get install -y nodejs
 
 ```bash
 # 使用 npm 更新
-npm update -g clawdbot
+npm update -g openclaw
 
 # 或使用配置菜单
 ./config-menu.sh
-# 选择 [7] 高级设置 → [7] 更新 ClawdBot
+# 选择 [7] 高级设置 → [7] 更新 OpenClaw
 ```
 
 ### Q: 如何备份数据？
 
 ```bash
 # 手动备份
-cp -r ~/.clawdbot ~/clawdbot_backup_$(date +%Y%m%d)
+cp -r ~/.openclaw ~/openclaw_backup_$(date +%Y%m%d)
 
 # 使用命令备份
-clawdbot backup
+openclaw backup
 ```
 
 ### Q: 如何完全卸载？
 
 ```bash
 # 停止服务
-clawdbot gateway stop
+openclaw gateway stop
 
 # 卸载程序
-npm uninstall -g clawdbot
+npm uninstall -g openclaw
 
 # 删除配置（可选）
-rm -rf ~/.clawdbot
+rm -rf ~/.openclaw
 ```
 
 ## 📜 更新日志
@@ -493,11 +493,11 @@ rm -rf ~/.clawdbot
 
 ## 🔗 相关链接
 
-- [ClawdBot 官网](https://clawd.bot)
+- [OpenClaw 官网](https://clawd.bot)
 - [官方文档](https://clawd.bot/docs)
-- [安装工具仓库](https://github.com/miaoxworld/ClawdBotInstaller)
-- [ClawdBot 主仓库](https://github.com/clawdbot/clawdbot)
-- [社区讨论](https://github.com/miaoxworld/ClawdBotInstaller/discussions)
+- [安装工具仓库](https://github.com/miaoxworld/OpenClawInstaller)
+- [OpenClaw 主仓库](https://github.com/openclaw/openclaw)
+- [社区讨论](https://github.com/miaoxworld/OpenClawInstaller/discussions)
 
 ---
 
