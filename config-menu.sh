@@ -607,6 +607,117 @@ test_slack_bot() {
     fi
 }
 
+# 测试飞书机器人
+test_feishu_bot() {
+    local app_id=$1
+    local app_secret=$2
+    local chat_id=$3
+    
+    echo ""
+    echo -e "${CYAN}━━━ 测试飞书机器人 ━━━${NC}"
+    echo ""
+    
+    # 1. 获取 tenant_access_token
+    echo -e "${YELLOW}1. 获取 tenant_access_token...${NC}"
+    local token_result=$(curl -s -X POST "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"app_id\": \"$app_id\",
+            \"app_secret\": \"$app_secret\"
+        }" 2>/dev/null)
+    
+    local code=$(echo "$token_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null)
+    
+    if [ "$code" != "0" ]; then
+        local msg=$(echo "$token_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('msg', '未知错误'))" 2>/dev/null)
+        log_error "获取 Token 失败: $msg"
+        echo ""
+        echo -e "${YELLOW}请检查:${NC}"
+        echo "  • App ID 和 App Secret 是否正确"
+        echo "  • 应用是否已发布"
+        return 1
+    fi
+    
+    local access_token=$(echo "$token_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tenant_access_token', ''))" 2>/dev/null)
+    log_info "Token 获取成功！"
+    
+    # 2. 获取机器人信息
+    echo ""
+    echo -e "${YELLOW}2. 获取机器人信息...${NC}"
+    local bot_info=$(curl -s "https://open.feishu.cn/open-apis/bot/v3/info" \
+        -H "Authorization: Bearer $access_token" 2>/dev/null)
+    
+    local bot_code=$(echo "$bot_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null)
+    if [ "$bot_code" = "0" ]; then
+        local bot_name=$(echo "$bot_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('bot', {}).get('app_name', 'Unknown'))" 2>/dev/null)
+        log_info "机器人: $bot_name"
+    else
+        log_warn "无法获取机器人信息（可能需要添加机器人能力）"
+    fi
+    
+    # 3. 发送测试消息（如果提供了 chat_id）
+    if [ -n "$chat_id" ]; then
+        echo ""
+        echo -e "${YELLOW}3. 发送测试消息...${NC}"
+        
+        local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+        
+        # 使用 Python 正确构建 JSON，确保 content 是字符串化的 JSON
+        local request_body=$(python3 -c "
+import json
+
+message = '''🦞 ClawdBot 测试消息
+
+这是一条来自配置工具的测试消息。
+如果你收到这条消息，说明飞书机器人配置成功！
+
+时间: $timestamp'''
+
+# content 必须是一个 JSON 字符串（字符串化的 JSON 对象）
+content_obj = {'text': message}
+content_str = json.dumps(content_obj, ensure_ascii=False)
+
+body = {
+    'receive_id': '$chat_id',
+    'msg_type': 'text',
+    'content': content_str
+}
+print(json.dumps(body, ensure_ascii=False))
+" 2>/dev/null)
+        
+        echo -e "${GRAY}请求体: $request_body${NC}"
+        
+        local send_result=$(curl -s -X POST "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id" \
+            -H "Authorization: Bearer $access_token" \
+            -H "Content-Type: application/json" \
+            -d "$request_body" 2>/dev/null)
+        
+        echo -e "${GRAY}响应: $send_result${NC}"
+        echo ""
+        
+        local send_code=$(echo "$send_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null)
+        if [ "$send_code" = "0" ]; then
+            log_info "测试消息发送成功！请检查飞书群组"
+        else
+            local send_msg=$(echo "$send_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('msg', '未知错误'))" 2>/dev/null)
+            log_error "消息发送失败: $send_msg (code: $send_code)"
+            echo ""
+            echo -e "${YELLOW}提示:${NC}"
+            echo "  • 确保机器人已添加到群组"
+            echo "  • 确保有 im:message:send_as_bot 权限"
+            echo "  • 群组 ID 可在群设置中查看"
+        fi
+    else
+        echo ""
+        echo -e "${GREEN}✓ 飞书应用验证成功！${NC}"
+        echo ""
+        echo -e "${YELLOW}如需发送测试消息，请提供群组 Chat ID${NC}"
+        echo -e "${GRAY}获取方式: 群设置 → 群信息 → 群号${NC}"
+    fi
+    
+    return 0
+}
+
 # 测试 Ollama 连接
 test_ollama_connection() {
     local base_url=$1
@@ -2995,6 +3106,22 @@ config_feishu_app() {
         restart_gateway_for_channel
     fi
     
+    # 询问是否测试
+    echo ""
+    if confirm "是否发送测试消息验证配置？" "y"; then
+        echo ""
+        echo -e "${CYAN}如需发送测试消息，请输入群组 Chat ID:${NC}"
+        echo -e "${GRAY}获取方式: 群设置 → 群信息 → 群号${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}Chat ID (留空跳过测试): ${NC}")" feishu_chat_id
+        
+        if [ -n "$feishu_chat_id" ]; then
+            test_feishu_bot "$feishu_app_id" "$feishu_app_secret" "$feishu_chat_id"
+        else
+            test_feishu_bot "$feishu_app_id" "$feishu_app_secret"
+        fi
+    fi
+    
     press_enter
 }
 
@@ -3966,18 +4093,19 @@ quick_test_menu() {
     print_menu_item "2" "测试 Telegram 机器人" "📨"
     print_menu_item "3" "测试 Discord 机器人" "🎮"
     print_menu_item "4" "测试 Slack 机器人" "💼"
-    print_menu_item "5" "测试 Ollama 本地模型" "🟠"
+    print_menu_item "5" "测试飞书机器人" "🔷"
+    print_menu_item "6" "测试 Ollama 本地模型" "🟠"
     echo ""
     echo -e "${CYAN}ClawdBot 诊断 (需要已安装):${NC}"
-    print_menu_item "6" "clawdbot doctor (诊断)" "🔍"
-    print_menu_item "7" "clawdbot status (渠道状态)" "📊"
-    print_menu_item "8" "clawdbot health (Gateway 健康)" "💚"
+    print_menu_item "7" "clawdbot doctor (诊断)" "🔍"
+    print_menu_item "8" "clawdbot status (渠道状态)" "📊"
+    print_menu_item "9" "clawdbot health (Gateway 健康)" "💚"
     echo ""
-    print_menu_item "9" "运行全部 API 测试" "🔄"
+    print_menu_item "a" "运行全部 API 测试" "🔄"
     print_menu_item "0" "返回主菜单" "↩️"
     echo ""
     
-    echo -en "${YELLOW}请选择 [0-9]: ${NC}"
+    echo -en "${YELLOW}请选择 [0-9/a]: ${NC}"
     read choice < "$TTY_INPUT"
     
     case $choice in
@@ -3985,11 +4113,12 @@ quick_test_menu() {
         2) quick_test_telegram ;;
         3) quick_test_discord ;;
         4) quick_test_slack ;;
-        5) quick_test_ollama ;;
-        6) quick_test_doctor ;;
-        7) quick_test_status ;;
-        8) quick_test_health ;;
-        9) run_all_tests ;;
+        5) quick_test_feishu ;;
+        6) quick_test_ollama ;;
+        7) quick_test_doctor ;;
+        8) quick_test_status ;;
+        9) quick_test_health ;;
+        a|A) run_all_tests ;;
         0) return ;;
         *) log_error "无效选择"; press_enter; quick_test_menu ;;
     esac
@@ -4143,6 +4272,53 @@ quick_test_slack() {
     fi
     
     test_slack_bot "$bot_token"
+    
+    press_enter
+    quick_test_menu
+}
+
+quick_test_feishu() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}🔷 测试飞书机器人${NC}"
+    print_divider
+    echo ""
+    
+    local app_id=""
+    local app_secret=""
+    
+    # 尝试从已保存的配置中读取
+    if check_clawdbot_installed; then
+        app_id=$(clawdbot config get channels.feishu.appId 2>/dev/null | tr -d '"' | tr -d ' ')
+        app_secret=$(clawdbot config get channels.feishu.appSecret 2>/dev/null | tr -d '"' | tr -d ' ')
+    fi
+    
+    if [ -n "$app_id" ] && [ -n "$app_secret" ]; then
+        echo -e "${GREEN}✓ 检测到已配置的飞书应用${NC}"
+        echo -e "  App ID: ${WHITE}${app_id:0:15}...${NC}"
+        echo ""
+    else
+        echo -e "${YELLOW}未检测到飞书配置，请手动输入:${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}App ID: ${NC}")" app_id
+        read -p "$(echo -e "${YELLOW}App Secret: ${NC}")" app_secret
+        
+        if [ -z "$app_id" ] || [ -z "$app_secret" ]; then
+            log_error "App ID 和 App Secret 不能为空"
+            press_enter
+            quick_test_menu
+            return
+        fi
+    fi
+    
+    echo ""
+    echo -e "${CYAN}如需发送测试消息，请输入群组 Chat ID（留空跳过）:${NC}"
+    echo -e "${GRAY}获取方式: 群设置 → 群信息 → 群号${NC}"
+    echo ""
+    read -p "$(echo -e "${YELLOW}Chat ID (可选): ${NC}")" chat_id
+    
+    test_feishu_bot "$app_id" "$app_secret" "$chat_id"
     
     press_enter
     quick_test_menu
