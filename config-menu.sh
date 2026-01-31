@@ -3098,6 +3098,48 @@ config_imessage() {
     press_enter
 }
 
+# 安装飞书插件（使用指定版本 0.1.2，因为新版本有问题）
+install_feishu_plugin() {
+    echo -e "${YELLOW}安装飞书插件...${NC}"
+    echo ""
+    
+    # 检查是否已安装飞书插件
+    local installed=$(clawdbot plugins list 2>/dev/null | grep -i feishu || echo "")
+    
+    if [ -n "$installed" ]; then
+        log_info "飞书插件已安装: $installed"
+        return 0
+    fi
+    
+    echo -e "${CYAN}正在安装飞书插件 @m1heng-clawd/feishu@0.1.2 ...${NC}"
+    echo ""
+    
+    # 使用 clawdbot plugins install 安装指定版本
+    # 注意：新版本 0.1.4 有问题（缺少 clawdbot.extensions），必须使用 0.1.2
+    local install_output
+    install_output=$(clawdbot plugins install @m1heng-clawd/feishu@0.1.2 2>&1)
+    local install_exit=$?
+    
+    # 过滤掉 banner，显示关键信息
+    echo "$install_output" | grep -v "^🦞" | grep -v "^$" | head -5
+    
+    if [ $install_exit -eq 0 ]; then
+        echo ""
+        log_info "✅ 飞书插件安装成功！"
+        return 0
+    else
+        echo ""
+        log_error "插件安装失败"
+        echo ""
+        echo -e "${CYAN}请手动安装:${NC}"
+        echo "  clawdbot plugins install @m1heng-clawd/feishu@0.1.2"
+        echo ""
+        echo -e "${YELLOW}⚠️  注意: 必须使用 0.1.2 版本，新版本 0.1.4 有问题${NC}"
+        echo ""
+        return 1
+    fi
+}
+
 # 保存飞书配置（使用 clawdbot 原生命令）
 save_feishu_config() {
     local app_id="$1"
@@ -3106,28 +3148,46 @@ save_feishu_config() {
     echo -e "${YELLOW}添加飞书渠道...${NC}"
     
     # 使用 clawdbot channels add 添加飞书渠道
-    if ! clawdbot channels add --channel feishu 2>/dev/null; then
+    local add_output
+    add_output=$(clawdbot channels add --channel feishu 2>&1)
+    local add_exit=$?
+    
+    # 过滤掉 clawdbot banner，只显示关键信息
+    echo "$add_output" | grep -v "^🦞" | grep -v "^$" | head -3
+    
+    if [ $add_exit -ne 0 ]; then
         log_warn "飞书渠道可能已存在，继续配置..."
     fi
     
     # 使用 clawdbot config set 设置凭证
     echo -e "${YELLOW}配置 App ID...${NC}"
-    if ! clawdbot config set channels.feishu.appId "$app_id" 2>/dev/null; then
+    local set_output
+    set_output=$(clawdbot config set channels.feishu.appId "$app_id" 2>&1)
+    local set_exit=$?
+    
+    if [ $set_exit -ne 0 ]; then
+        echo "$set_output" | grep -v "^🦞" | grep -v "^$"
         log_error "设置 App ID 失败"
         return 1
     fi
+    echo "$set_output" | grep -v "^🦞" | grep -v "^$" | head -1
     
     echo -e "${YELLOW}配置 App Secret...${NC}"
-    if ! clawdbot config set channels.feishu.appSecret "$app_secret" 2>/dev/null; then
+    set_output=$(clawdbot config set channels.feishu.appSecret "$app_secret" 2>&1)
+    set_exit=$?
+    
+    if [ $set_exit -ne 0 ]; then
+        echo "$set_output" | grep -v "^🦞" | grep -v "^$"
         log_error "设置 App Secret 失败"
         return 1
     fi
+    echo "$set_output" | grep -v "^🦞" | grep -v "^$" | head -1
     
     # 设置其他默认配置
-    clawdbot config set channels.feishu.enabled true 2>/dev/null || true
-    clawdbot config set channels.feishu.connectionMode websocket 2>/dev/null || true
-    clawdbot config set channels.feishu.domain feishu 2>/dev/null || true
-    clawdbot config set channels.feishu.requireMention true 2>/dev/null || true
+    clawdbot config set channels.feishu.enabled true > /dev/null 2>&1 || true
+    clawdbot config set channels.feishu.connectionMode websocket > /dev/null 2>&1 || true
+    clawdbot config set channels.feishu.domain feishu > /dev/null 2>&1 || true
+    clawdbot config set channels.feishu.requireMention true > /dev/null 2>&1 || true
     
     log_info "飞书渠道配置完成"
     return 0
@@ -3219,16 +3279,15 @@ config_feishu_app() {
         return
     fi
     
-    # ========== 第一步：检查环境 ==========
+    # ========== 第一步：安装飞书插件 ==========
     echo ""
-    echo -e "${WHITE}━━━ 第一步: 检查环境 (自动) ━━━${NC}"
+    echo -e "${WHITE}━━━ 第一步: 安装飞书插件 (自动) ━━━${NC}"
     echo ""
     
-    # ClawdBot 原生支持飞书，无需安装额外插件
-    log_info "✅ ClawdBot 原生支持飞书渠道"
+    install_feishu_plugin
     
     echo ""
-    log_info "✅ 第一步完成！环境已就绪"
+    log_info "✅ 第一步完成！插件已就绪"
     echo ""
     
     # ========== 第二、三步提示 ==========
