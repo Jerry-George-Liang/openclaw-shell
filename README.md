@@ -95,7 +95,6 @@
 ### 方式一：一键安装（推荐）
 
 ```bash
-# 下载并运行安装脚本
 curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/install.sh | bash
 ```
 

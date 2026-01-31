@@ -159,7 +159,7 @@ detect_os() {
 }
 
 check_root() {
-    if [[ "$OS" != "macos" ]] && [[ $EUID -eq 0 ]]; then
+    if [[ $EUID -eq 0 ]]; then
         log_warn "检测到以 root 用户运行"
         if ! confirm "建议使用普通用户运行，是否继续？" "n"; then
             exit 1
