@@ -217,6 +217,8 @@ curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/c
 
 ### 配置飞书机器人
 
+> 📖 **详细文档**: 查看 [飞书机器人配置指南](docs/feishu-setup.md) 获取完整的配置说明和常见问题解答。
+
 > 💡 **无需公网服务器**：ClawdBot 使用飞书的 WebSocket 长连接模式接收事件，无需配置 Webhook 地址。
 
 1. 访问 [飞书开放平台](https://open.feishu.cn/)
