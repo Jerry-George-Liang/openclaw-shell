@@ -256,6 +256,18 @@ ollama pull llama3
    - ⚠️ **注意**：需要 ClawdBot 服务已启动，才能保存长连接设置
 9. 添加机器人到群组：群设置 → 群机器人 → 添加机器人
 
+### 配置 WhatsApp
+
+> 💡 **无需 Business API**：ClawdBot 通过扫码登录你的 WhatsApp 账号，无需申请 Business API。
+
+1. 在配置菜单中选择 `[3] 消息渠道配置` → `[3] WhatsApp`
+2. 系统会自动启用 WhatsApp 插件
+3. 扫描终端显示的二维码完成登录
+4. 登录成功后重启 Gateway 使配置生效
+5. **测试**：用自己的 WhatsApp 给自己发消息即可触发机器人回复
+
+> ⚠️ **注意**：WhatsApp 账号只能在一个设备上登录 Web 版，配置后原有的 WhatsApp Web 会被踢下线。
+
 ## 📝 常用命令
 
 ### 服务管理
