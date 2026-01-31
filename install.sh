@@ -353,6 +353,14 @@ EOF
             echo "export OPENAI_API_KEY=$AI_KEY" >> "$env_file"
             [ -n "$BASE_URL" ] && echo "export OPENAI_BASE_URL=$BASE_URL" >> "$env_file"
             ;;
+        deepseek)
+            echo "export DEEPSEEK_API_KEY=$AI_KEY" >> "$env_file"
+            echo "export DEEPSEEK_BASE_URL=${BASE_URL:-https://api.deepseek.com}" >> "$env_file"
+            ;;
+        kimi)
+            echo "export MOONSHOT_API_KEY=$AI_KEY" >> "$env_file"
+            echo "export MOONSHOT_BASE_URL=${BASE_URL:-https://api.moonshot.cn/v1}" >> "$env_file"
+            ;;
         google)
             echo "export GOOGLE_API_KEY=$AI_KEY" >> "$env_file"
             [ -n "$BASE_URL" ] && echo "export GOOGLE_BASE_URL=$BASE_URL" >> "$env_file"
@@ -398,6 +406,12 @@ EOF
                     ;;
                 openai|groq|mistral)
                     clawdbot_model="openai/$AI_MODEL"
+                    ;;
+                deepseek)
+                    clawdbot_model="deepseek/$AI_MODEL"
+                    ;;
+                kimi)
+                    clawdbot_model="kimi/$AI_MODEL"
                     ;;
                 openrouter)
                     clawdbot_model="openrouter/$AI_MODEL"
@@ -828,15 +842,17 @@ setup_ai_provider() {
     echo ""
     echo "  1) 🟣 Anthropic Claude"
     echo "  2) 🟢 OpenAI GPT"
-    echo "  3) 🟠 Ollama (本地模型)"
-    echo "  4) 🔵 OpenRouter (多模型网关)"
+    echo "  3) 🔵 DeepSeek"
+    echo "  4) 🌙 Kimi (Moonshot)"
     echo "  5) 🔴 Google Gemini"
-    echo "  6) ⚡ Groq (超快推理)"
-    echo "  7) 🌬️ Mistral AI"
+    echo "  6) 🔄 OpenRouter (多模型网关)"
+    echo "  7) ⚡ Groq (超快推理)"
+    echo "  8) 🌬️ Mistral AI"
+    echo "  9) 🟠 Ollama (本地模型)"
     echo ""
-    echo -e "${GRAY}提示: Anthropic 支持自定义 API 地址（通过 clawdbot.json 配置自定义 Provider）${NC}"
+    echo -e "${GRAY}提示: 支持自定义 API 地址（通过 clawdbot.json 配置自定义 Provider）${NC}"
     echo ""
-    echo -en "${YELLOW}请选择 AI 提供商 [1-7] (默认: 1): ${NC}"; read ai_choice < "$TTY_INPUT"
+    echo -en "${YELLOW}请选择 AI 提供商 [1-9] (默认: 1): ${NC}"; read ai_choice < "$TTY_INPUT"
     ai_choice=${ai_choice:-1}
     
     case $ai_choice in
@@ -889,28 +905,79 @@ setup_ai_provider() {
             esac
             ;;
         3)
-            AI_PROVIDER="ollama"
-            AI_KEY=""
+            AI_PROVIDER="deepseek"
             echo ""
-            echo -e "${CYAN}配置 Ollama 本地模型${NC}"
+            echo -e "${CYAN}配置 DeepSeek${NC}"
+            echo -e "${GRAY}官方 API: https://platform.deepseek.com/${NC}"
             echo ""
-            echo -en "${YELLOW}Ollama 地址 (默认: http://localhost:11434): ${NC}"; read BASE_URL < "$TTY_INPUT"
-            BASE_URL=${BASE_URL:-"http://localhost:11434"}
+            echo -en "${YELLOW}自定义 API 地址 (留空使用官方 API): ${NC}"; read BASE_URL < "$TTY_INPUT"
+            BASE_URL=${BASE_URL:-"https://api.deepseek.com"}
+            echo ""
+            echo -en "${YELLOW}输入 API Key: ${NC}"; read AI_KEY < "$TTY_INPUT"
             echo ""
             echo "选择模型:"
-            echo "  1) llama3"
-            echo "  2) llama3:70b"
-            echo "  3) mistral"
-            echo "  4) 自定义"
+            echo "  1) deepseek-chat (V3.2, 推荐)"
+            echo "  2) deepseek-reasoner (R1, 推理)"
+            echo "  3) deepseek-coder"
+            echo "  4) 自定义模型名称"
             echo -en "${YELLOW}选择模型 [1-4] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
             case $model_choice in
-                2) AI_MODEL="llama3:70b" ;;
-                3) AI_MODEL="mistral" ;;
+                2) AI_MODEL="deepseek-reasoner" ;;
+                3) AI_MODEL="deepseek-coder" ;;
                 4) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
-                *) AI_MODEL="llama3" ;;
+                *) AI_MODEL="deepseek-chat" ;;
             esac
             ;;
         4)
+            AI_PROVIDER="kimi"
+            echo ""
+            echo -e "${CYAN}配置 Kimi (Moonshot)${NC}"
+            echo -e "${GRAY}官方 API: https://platform.moonshot.cn/${NC}"
+            echo ""
+            echo -en "${YELLOW}自定义 API 地址 (留空使用官方 API): ${NC}"; read BASE_URL < "$TTY_INPUT"
+            BASE_URL=${BASE_URL:-"https://api.moonshot.cn/v1"}
+            echo ""
+            echo -en "${YELLOW}输入 API Key: ${NC}"; read AI_KEY < "$TTY_INPUT"
+            echo ""
+            echo "选择模型:"
+            echo "  1) moonshot-v1-auto (自动, 推荐)"
+            echo "  2) moonshot-v1-8k"
+            echo "  3) moonshot-v1-32k"
+            echo "  4) moonshot-v1-128k"
+            echo "  5) 自定义模型名称"
+            echo -en "${YELLOW}选择模型 [1-5] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
+            case $model_choice in
+                2) AI_MODEL="moonshot-v1-8k" ;;
+                3) AI_MODEL="moonshot-v1-32k" ;;
+                4) AI_MODEL="moonshot-v1-128k" ;;
+                5) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
+                *) AI_MODEL="moonshot-v1-auto" ;;
+            esac
+            ;;
+        5)
+            AI_PROVIDER="google"
+            echo ""
+            echo -e "${CYAN}配置 Google Gemini${NC}"
+            echo -e "${GRAY}获取 API Key: https://aistudio.google.com/apikey${NC}"
+            echo ""
+            echo -en "${YELLOW}输入 API Key: ${NC}"; read AI_KEY < "$TTY_INPUT"
+            echo ""
+            echo -en "${YELLOW}自定义 API 地址 (留空使用官方): ${NC}"; read BASE_URL < "$TTY_INPUT"
+            echo ""
+            echo "选择模型:"
+            echo "  1) gemini-2.0-flash (推荐)"
+            echo "  2) gemini-1.5-pro"
+            echo "  3) gemini-1.5-flash"
+            echo "  4) 自定义"
+            echo -en "${YELLOW}选择模型 [1-4] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
+            case $model_choice in
+                2) AI_MODEL="gemini-1.5-pro" ;;
+                3) AI_MODEL="gemini-1.5-flash" ;;
+                4) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
+                *) AI_MODEL="gemini-2.0-flash" ;;
+            esac
+            ;;
+        6)
             AI_PROVIDER="openrouter"
             echo ""
             echo -e "${CYAN}配置 OpenRouter${NC}"
@@ -934,30 +1001,7 @@ setup_ai_provider() {
                 *) AI_MODEL="anthropic/claude-sonnet-4" ;;
             esac
             ;;
-        5)
-            AI_PROVIDER="google"
-            echo ""
-            echo -e "${CYAN}配置 Google Gemini${NC}"
-            echo -e "${GRAY}获取 API Key: https://makersuite.google.com/app/apikey${NC}"
-            echo ""
-            echo -en "${YELLOW}输入 API Key: ${NC}"; read AI_KEY < "$TTY_INPUT"
-            echo ""
-            echo -en "${YELLOW}自定义 API 地址 (留空使用官方): ${NC}"; read BASE_URL < "$TTY_INPUT"
-            echo ""
-            echo "选择模型:"
-            echo "  1) gemini-2.0-flash (推荐)"
-            echo "  2) gemini-1.5-pro"
-            echo "  3) gemini-1.5-flash"
-            echo "  4) 自定义"
-            echo -en "${YELLOW}选择模型 [1-4] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
-            case $model_choice in
-                2) AI_MODEL="gemini-1.5-pro" ;;
-                3) AI_MODEL="gemini-1.5-flash" ;;
-                4) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
-                *) AI_MODEL="gemini-2.0-flash" ;;
-            esac
-            ;;
-        6)
+        7)
             AI_PROVIDER="groq"
             echo ""
             echo -e "${CYAN}配置 Groq${NC}"
@@ -981,7 +1025,7 @@ setup_ai_provider() {
                 *) AI_MODEL="llama-3.3-70b-versatile" ;;
             esac
             ;;
-        7)
+        8)
             AI_PROVIDER="mistral"
             echo ""
             echo -e "${CYAN}配置 Mistral AI${NC}"
@@ -1003,6 +1047,28 @@ setup_ai_provider() {
                 3) AI_MODEL="codestral-latest" ;;
                 4) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
                 *) AI_MODEL="mistral-large-latest" ;;
+            esac
+            ;;
+        9)
+            AI_PROVIDER="ollama"
+            AI_KEY=""
+            echo ""
+            echo -e "${CYAN}配置 Ollama 本地模型${NC}"
+            echo ""
+            echo -en "${YELLOW}Ollama 地址 (默认: http://localhost:11434): ${NC}"; read BASE_URL < "$TTY_INPUT"
+            BASE_URL=${BASE_URL:-"http://localhost:11434"}
+            echo ""
+            echo "选择模型:"
+            echo "  1) llama3"
+            echo "  2) llama3:70b"
+            echo "  3) mistral"
+            echo "  4) 自定义"
+            echo -en "${YELLOW}选择模型 [1-4] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
+            case $model_choice in
+                2) AI_MODEL="llama3:70b" ;;
+                3) AI_MODEL="mistral" ;;
+                4) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
+                *) AI_MODEL="llama3" ;;
             esac
             ;;
         *)

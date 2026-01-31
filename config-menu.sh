@@ -943,50 +943,54 @@ config_ai_model() {
     echo -e "${WHITE}主流服务商:${NC}"
     print_menu_item "1" "Anthropic Claude" "🟣"
     print_menu_item "2" "OpenAI GPT" "🟢"
-    print_menu_item "3" "Google Gemini" "🔴"
-    print_menu_item "4" "xAI Grok" "𝕏"
+    print_menu_item "3" "DeepSeek" "🔵"
+    print_menu_item "4" "Kimi (Moonshot)" "🌙"
+    print_menu_item "5" "Google Gemini" "🔴"
     echo ""
     echo -e "${WHITE}多模型网关:${NC}"
-    print_menu_item "5" "OpenRouter (多模型网关)" "🔵"
-    print_menu_item "6" "OpenCode (免费多模型)" "🆓"
+    print_menu_item "6" "OpenRouter (多模型网关)" "🔄"
+    print_menu_item "7" "OpenCode (免费多模型)" "🆓"
     echo ""
     echo -e "${WHITE}快速推理:${NC}"
-    print_menu_item "7" "Groq (超快推理)" "⚡"
-    print_menu_item "8" "Mistral AI" "🌬️"
+    print_menu_item "8" "Groq (超快推理)" "⚡"
+    print_menu_item "9" "Mistral AI" "🌬️"
     echo ""
     echo -e "${WHITE}本地/企业:${NC}"
-    print_menu_item "9" "Ollama 本地模型" "🟠"
-    print_menu_item "10" "Azure OpenAI" "☁️"
+    print_menu_item "10" "Ollama 本地模型" "🟠"
+    print_menu_item "11" "Azure OpenAI" "☁️"
     echo ""
-    echo -e "${WHITE}国产模型:${NC}"
-    print_menu_item "11" "智谱 GLM (Zai)" "🇨🇳"
-    print_menu_item "12" "MiniMax" "🤖"
+    echo -e "${WHITE}国产/其他:${NC}"
+    print_menu_item "12" "xAI Grok" "𝕏"
+    print_menu_item "13" "智谱 GLM (Zai)" "🇨🇳"
+    print_menu_item "14" "MiniMax" "🤖"
     echo ""
     echo -e "${WHITE}实验性:${NC}"
-    print_menu_item "13" "Google Gemini CLI" "🧪"
-    print_menu_item "14" "Google Antigravity" "🚀"
+    print_menu_item "15" "Google Gemini CLI" "🧪"
+    print_menu_item "16" "Google Antigravity" "🚀"
     echo ""
     print_menu_item "0" "返回主菜单" "↩️"
     echo ""
     
-    echo -en "${YELLOW}请选择 [0-14]: ${NC}"
+    echo -en "${YELLOW}请选择 [0-16]: ${NC}"
     read choice < "$TTY_INPUT"
     
     case $choice in
         1) config_anthropic ;;
         2) config_openai ;;
-        3) config_google_gemini ;;
-        4) config_xai ;;
-        5) config_openrouter ;;
-        6) config_opencode ;;
-        7) config_groq ;;
-        8) config_mistral ;;
-        9) config_ollama ;;
-        10) config_azure_openai ;;
-        11) config_zai ;;
-        12) config_minimax ;;
-        13) config_google_gemini_cli ;;
-        14) config_google_antigravity ;;
+        3) config_deepseek ;;
+        4) config_kimi ;;
+        5) config_google_gemini ;;
+        6) config_openrouter ;;
+        7) config_opencode ;;
+        8) config_groq ;;
+        9) config_mistral ;;
+        10) config_ollama ;;
+        11) config_azure_openai ;;
+        12) config_xai ;;
+        13) config_zai ;;
+        14) config_minimax ;;
+        15) config_google_gemini_cli ;;
+        16) config_google_antigravity ;;
         0) return ;;
         *) log_error "无效选择"; press_enter; config_ai_model ;;
     esac
@@ -1220,6 +1224,240 @@ config_openai() {
     echo ""
     if confirm "是否测试 API 连接？" "y"; then
         test_ai_connection "openai" "$api_key" "$model" "$base_url"
+    fi
+    
+    press_enter
+}
+
+config_deepseek() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}🔵 配置 DeepSeek${NC}"
+    print_divider
+    echo ""
+    
+    # 获取当前配置
+    local current_key=$(get_env_value "DEEPSEEK_API_KEY")
+    local current_url=$(get_env_value "DEEPSEEK_BASE_URL")
+    local official_url="https://api.deepseek.com"
+    
+    # 显示当前配置
+    echo -e "${CYAN}DeepSeek 提供高性能 AI 模型，支持 OpenAI 兼容格式${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    if [ -n "$current_url" ]; then
+        echo -e "  API 地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  API 地址: ${GRAY}(使用官方)${NC}"
+    fi
+    echo ""
+    
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://platform.deepseek.com/${NC}"
+    echo ""
+    print_divider
+    echo ""
+    
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key 和地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改所有设置)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    local base_url="${current_url:-$official_url}"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}API 地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  官方地址: ${WHITE}$official_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入 API 地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        if [ -n "$input_url" ]; then
+            base_url="$input_url"
+        fi
+        
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空，请先配置 API Key"
+        press_enter
+        return
+    fi
+    
+    echo ""
+    echo -e "${CYAN}选择模型:${NC}"
+    echo ""
+    print_menu_item "1" "deepseek-chat (V3.2, 推荐)" "⭐"
+    print_menu_item "2" "deepseek-reasoner (R1, 推理)" "🧠"
+    print_menu_item "3" "deepseek-coder (代码)" "💻"
+    print_menu_item "4" "自定义模型名称" "✏️"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-4] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
+    model_choice=${model_choice:-1}
+    
+    case $model_choice in
+        1) model="deepseek-chat" ;;
+        2) model="deepseek-reasoner" ;;
+        3) model="deepseek-coder" ;;
+        4) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
+        *) model="deepseek-chat" ;;
+    esac
+    
+    # 保存到 ClawdBot 环境变量配置
+    save_clawdbot_ai_config "deepseek" "$api_key" "$model" "$base_url"
+    
+    echo ""
+    log_info "DeepSeek 配置完成！"
+    log_info "模型: $model"
+    log_info "API 地址: $base_url"
+    
+    # 询问是否测试
+    echo ""
+    if confirm "是否测试 API 连接？" "y"; then
+        test_ai_connection "deepseek" "$api_key" "$model" "$base_url"
+    fi
+    
+    press_enter
+}
+
+config_kimi() {
+    clear_screen
+    print_header
+    
+    echo -e "${WHITE}🌙 配置 Kimi (Moonshot)${NC}"
+    print_divider
+    echo ""
+    
+    # 获取当前配置
+    local current_key=$(get_env_value "MOONSHOT_API_KEY")
+    local current_url=$(get_env_value "MOONSHOT_BASE_URL")
+    local official_url="https://api.moonshot.cn/v1"
+    
+    # 显示当前配置
+    echo -e "${CYAN}Kimi 是月之暗面（Moonshot AI）推出的大语言模型${NC}"
+    echo ""
+    echo -e "${CYAN}当前配置:${NC}"
+    if [ -n "$current_key" ]; then
+        local masked_key="${current_key:0:8}...${current_key: -4}"
+        echo -e "  API Key: ${WHITE}$masked_key${NC}"
+    else
+        echo -e "  API Key: ${GRAY}(未配置)${NC}"
+    fi
+    if [ -n "$current_url" ]; then
+        echo -e "  API 地址: ${WHITE}$current_url${NC}"
+    else
+        echo -e "  API 地址: ${GRAY}(使用官方)${NC}"
+    fi
+    echo ""
+    
+    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
+    echo -e "${GRAY}获取 Key: https://platform.moonshot.cn/${NC}"
+    echo ""
+    print_divider
+    echo ""
+    
+    # 询问配置模式
+    echo -e "${YELLOW}选择配置模式:${NC}"
+    print_menu_item "1" "仅更改模型 (保留当前 API Key 和地址)" "🔄"
+    print_menu_item "2" "完整配置 (可修改所有设置)" "⚙️"
+    echo ""
+    read -p "$(echo -e "${YELLOW}请选择 [1-2] (默认: 1): ${NC}")" config_mode < "$TTY_INPUT"
+    config_mode=${config_mode:-1}
+    
+    local api_key="$current_key"
+    local base_url="${current_url:-$official_url}"
+    
+    if [ "$config_mode" = "2" ]; then
+        echo ""
+        echo -e "${CYAN}API 地址配置:${NC}"
+        [ -n "$current_url" ] && echo -e "  当前地址: ${WHITE}$current_url${NC}"
+        echo -e "  官方地址: ${WHITE}$official_url${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}输入 API 地址 (留空保持当前配置): ${NC}")" input_url < "$TTY_INPUT"
+        
+        if [ -n "$input_url" ]; then
+            base_url="$input_url"
+        fi
+        
+        echo ""
+        if [ -n "$current_key" ]; then
+            local masked_key="${current_key:0:8}...${current_key: -4}"
+            echo -e "当前 API Key: ${GRAY}$masked_key${NC}"
+        fi
+        
+        read -p "$(echo -e "${YELLOW}输入 API Key (留空保持不变): ${NC}")" input_key < "$TTY_INPUT"
+        
+        if [ -n "$input_key" ]; then
+            api_key="$input_key"
+        fi
+    fi
+    
+    # 验证 API Key
+    if [ -z "$api_key" ]; then
+        log_error "API Key 不能为空，请先配置 API Key"
+        press_enter
+        return
+    fi
+    
+    echo ""
+    echo -e "${CYAN}选择模型:${NC}"
+    echo ""
+    print_menu_item "1" "moonshot-v1-auto (自动, 推荐)" "⭐"
+    print_menu_item "2" "moonshot-v1-8k" "📄"
+    print_menu_item "3" "moonshot-v1-32k" "📑"
+    print_menu_item "4" "moonshot-v1-128k (长文本)" "📚"
+    print_menu_item "5" "自定义模型名称" "✏️"
+    echo ""
+    
+    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
+    model_choice=${model_choice:-1}
+    
+    case $model_choice in
+        1) model="moonshot-v1-auto" ;;
+        2) model="moonshot-v1-8k" ;;
+        3) model="moonshot-v1-32k" ;;
+        4) model="moonshot-v1-128k" ;;
+        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
+        *) model="moonshot-v1-auto" ;;
+    esac
+    
+    # 保存到 ClawdBot 环境变量配置
+    save_clawdbot_ai_config "kimi" "$api_key" "$model" "$base_url"
+    
+    echo ""
+    log_info "Kimi (Moonshot) 配置完成！"
+    log_info "模型: $model"
+    log_info "API 地址: $base_url"
+    
+    # 询问是否测试
+    echo ""
+    if confirm "是否测试 API 连接？" "y"; then
+        test_ai_connection "kimi" "$api_key" "$model" "$base_url"
     fi
     
     press_enter
@@ -3507,6 +3745,14 @@ EOF
             echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
             [ -n "$base_url" ] && echo "export OPENAI_BASE_URL=$base_url" >> "$env_file"
             ;;
+        deepseek)
+            echo "export DEEPSEEK_API_KEY=$api_key" >> "$env_file"
+            echo "export DEEPSEEK_BASE_URL=${base_url:-https://api.deepseek.com}" >> "$env_file"
+            ;;
+        kimi)
+            echo "export MOONSHOT_API_KEY=$api_key" >> "$env_file"
+            echo "export MOONSHOT_BASE_URL=${base_url:-https://api.moonshot.cn/v1}" >> "$env_file"
+            ;;
         google|google-gemini-cli|google-antigravity)
             echo "export GOOGLE_API_KEY=$api_key" >> "$env_file"
             [ -n "$base_url" ] && echo "export GOOGLE_BASE_URL=$base_url" >> "$env_file"
@@ -3563,6 +3809,12 @@ EOF
                     ;;
                 openai|groq|mistral)
                     clawdbot_model="openai/$model"
+                    ;;
+                deepseek)
+                    clawdbot_model="deepseek/$model"
+                    ;;
+                kimi)
+                    clawdbot_model="kimi/$model"
                     ;;
                 openrouter)
                     clawdbot_model="openrouter/$model"
