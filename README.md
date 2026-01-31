@@ -14,15 +14,80 @@
 
 ## 📖 目录
 
-- [功能特性](#-功能特性)
 - [系统要求](#-系统要求)
 - [快速开始](#-快速开始)
+- [功能特性](#-功能特性)
 - [详细配置](#-详细配置)
 - [常用命令](#-常用命令)
 - [配置说明](#-配置说明)
 - [安全建议](#-安全建议)
 - [常见问题](#-常见问题)
 - [更新日志](#-更新日志)
+
+## 💻 系统要求
+
+| 项目 | 要求 |
+|------|------|
+| 操作系统 | macOS 12+ / Ubuntu 20.04+ / Debian 11+ / CentOS 8+ |
+| Node.js | v22 或更高版本 |
+| 内存 | 最低 2GB，推荐 4GB+ |
+| 磁盘空间 | 最低 1GB |
+
+## 🚀 快速开始
+
+### 方式一：一键安装（推荐）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/install.sh | bash
+```
+
+安装脚本会自动：
+1. 检测系统环境并安装依赖
+2. 安装 ClawdBot
+3. 引导完成核心配置（AI模型、身份信息）
+4. 测试 API 连接
+5. **自动启动 ClawdBot 服务**
+6. 可选打开配置菜单进行详细配置（渠道等）
+
+### 方式二：手动安装
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/miaoxworld/ClawdBotInstaller.git
+cd ClawdBotInstaller
+
+# 2. 添加执行权限
+chmod +x install.sh config-menu.sh
+
+# 3. 运行安装脚本
+./install.sh
+
+#如果mac有权限问题，可以手动安装clawbot之后再运行install
+npm install -g clawdbot
+```
+
+### 安装完成后
+
+安装完成后脚本会：
+1. **自动询问是否启动服务**（推荐选择 Y）
+2. 后台启动 ClawdBot Gateway
+3. 可选打开配置菜单进行渠道配置
+
+如果需要后续管理：
+
+```bash
+# 手动启动服务
+source ~/.clawdbot/env && clawdbot gateway
+
+# 后台启动服务
+clawdbot gateway start
+
+# 运行配置菜单进行详细配置
+bash ~/.clawdbot/config-menu.sh
+
+# 或从 GitHub 下载运行
+curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/config-menu.sh | bash
+```
 
 ## ✨ 功能特性
 
@@ -80,68 +145,6 @@
 - **主动推送** - 定时提醒、晨报、告警通知
 - **技能系统** - 通过 Markdown 文件定义自定义能力
 - **远程控制** - 可执行系统命令、读写文件、浏览网络
-
-## 💻 系统要求
-
-| 项目 | 要求 |
-|------|------|
-| 操作系统 | macOS 12+ / Ubuntu 20.04+ / Debian 11+ / CentOS 8+ |
-| Node.js | v22 或更高版本 |
-| 内存 | 最低 2GB，推荐 4GB+ |
-| 磁盘空间 | 最低 1GB |
-
-## 🚀 快速开始
-
-### 方式一：一键安装（推荐）
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/install.sh | bash
-```
-
-安装脚本会自动：
-1. 检测系统环境并安装依赖
-2. 安装 ClawdBot
-3. 引导完成核心配置（AI模型、身份信息）
-4. 测试 API 连接
-5. **自动启动 ClawdBot 服务**
-6. 可选打开配置菜单进行详细配置（渠道等）
-
-### 方式二：手动安装
-
-```bash
-# 1. 克隆仓库
-git clone https://github.com/miaoxworld/ClawdBotInstaller.git
-cd ClawdBotInstaller
-
-# 2. 添加执行权限
-chmod +x install.sh config-menu.sh
-
-# 3. 运行安装脚本
-./install.sh
-```
-
-### 安装完成后
-
-安装完成后脚本会：
-1. **自动询问是否启动服务**（推荐选择 Y）
-2. 后台启动 ClawdBot Gateway
-3. 可选打开配置菜单进行渠道配置
-
-如果需要后续管理：
-
-```bash
-# 手动启动服务
-source ~/.clawdbot/env && clawdbot gateway
-
-# 后台启动服务
-clawdbot gateway start
-
-# 运行配置菜单进行详细配置
-bash ~/.clawdbot/config-menu.sh
-
-# 或从 GitHub 下载运行
-curl -fsSL https://raw.githubusercontent.com/miaoxworld/ClawdBotInstaller/main/config-menu.sh | bash
-```
 
 ## ⚙️ 详细配置
 
