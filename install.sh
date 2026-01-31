@@ -1484,23 +1484,27 @@ run_config_menu() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     
-    # 优先使用本地的 config-menu.sh（脚本同目录）
-    if [ -f "$local_config_menu" ]; then
-        menu_script="$local_config_menu"
-        log_info "使用本地配置菜单: $local_config_menu"
-    # 检查当前目录是否已有
-    elif [ -f "$config_menu_path" ]; then
+    # 总是尝试从 GitHub 下载最新版本
+    log_step "从 GitHub 下载最新配置菜单..."
+    if curl -fsSL "$GITHUB_RAW_URL/config-menu.sh" -o "$config_menu_path.tmp"; then
+        # 下载成功，替换旧文件
+        mv "$config_menu_path.tmp" "$config_menu_path"
+        chmod +x "$config_menu_path"
+        log_info "配置菜单已更新: $config_menu_path"
         menu_script="$config_menu_path"
-        log_info "使用已下载的配置菜单: $config_menu_path"
     else
-        # 从 GitHub 下载到当前目录
-        log_step "从 GitHub 下载配置菜单..."
-        if curl -fsSL "$GITHUB_RAW_URL/config-menu.sh" -o "$config_menu_path"; then
-            chmod +x "$config_menu_path"
-            log_info "配置菜单下载成功: $config_menu_path"
+        # 下载失败，尝试使用本地已有的版本
+        rm -f "$config_menu_path.tmp" 2>/dev/null
+        log_warn "下载最新版本失败，尝试使用本地版本..."
+        
+        if [ -f "$local_config_menu" ]; then
+            menu_script="$local_config_menu"
+            log_info "使用本地配置菜单: $local_config_menu"
+        elif [ -f "$config_menu_path" ]; then
             menu_script="$config_menu_path"
+            log_info "使用已有的配置菜单: $config_menu_path"
         else
-            log_error "配置菜单下载失败"
+            log_error "配置菜单不可用"
             echo -e "${YELLOW}你可以稍后手动下载运行:${NC}"
             echo "  curl -fsSL $GITHUB_RAW_URL/config-menu.sh -o config-menu.sh && bash config-menu.sh"
             return 1

@@ -3388,7 +3388,8 @@ config_feishu_app() {
         echo -e "${CYAN}如需发送测试消息，请输入群组 Chat ID:${NC}"
         echo -e "${GRAY}获取方式: 群设置 → 群信息 → 群号${NC}"
         echo ""
-        read -p "$(echo -e "${YELLOW}Chat ID (留空跳过测试): ${NC}")" feishu_chat_id
+        echo -en "${YELLOW}Chat ID (留空跳过测试): ${NC}"
+        read feishu_chat_id < "$TTY_INPUT"
         
         if [ -n "$feishu_chat_id" ]; then
             test_feishu_bot "$feishu_app_id" "$feishu_app_secret" "$feishu_chat_id"
