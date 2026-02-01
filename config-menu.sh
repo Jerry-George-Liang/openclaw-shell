@@ -245,75 +245,32 @@ restart_gateway_for_channel() {
     echo ""
     log_info "正在重启 Gateway..."
     
-    # 检测端口是否被占用
-    local port=18789
-    local port_pid=$(lsof -ti :$port 2>/dev/null | head -1)
-    
-    if [ -n "$port_pid" ]; then
-        echo -e "${YELLOW}检测到端口 $port 已被占用 (PID: $port_pid)${NC}"
-        # 尝试正常停止
-        openclaw gateway stop > /dev/null 2>&1 || true
-        sleep 1
-        
-        # 再次检测
-        port_pid=$(lsof -ti :$port 2>/dev/null | head -1)
-        if [ -n "$port_pid" ]; then
-            echo -e "${YELLOW}正在强制停止占用端口的进程...${NC}"
-            kill -9 $port_pid 2>/dev/null || true
-            sleep 1
-        fi
+    # 加载环境变量
+    if [ -f "$OPENCLAW_ENV" ]; then
+        source "$OPENCLAW_ENV"
     fi
-    
-    # 先尝试停止（隐藏 doctor 输出）
-    openclaw gateway stop > /dev/null 2>&1 || true
-    pkill -f "openclaw.*gateway" 2>/dev/null || true
-    sleep 2
     
     # 先运行 doctor --fix 确保配置有效
     echo -e "${YELLOW}检查配置...${NC}"
     yes | openclaw doctor --fix > /dev/null 2>&1 || true
     
-    # 加载环境变量
-    if [ -f "$OPENCLAW_ENV" ]; then
-        source "$OPENCLAW_ENV"
-        log_info "已加载环境变量: $OPENCLAW_ENV"
-    fi
+    # 使用官方 restart 命令
+    local restart_output
+    restart_output=$(openclaw gateway restart 2>&1) || true
     
-    # 后台启动 Gateway（使用 setsid 完全脱离终端）
-    echo -e "${YELLOW}正在后台启动 Gateway...${NC}"
+    sleep 2
     
-    # 使用 setsid 创建新会话，确保进程完全独立
-    if command -v setsid &> /dev/null; then
-        if [ -f "$OPENCLAW_ENV" ]; then
-            setsid bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-        else
-            setsid openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-        fi
-    else
-        # 备用方案：nohup + disown
-        if [ -f "$OPENCLAW_ENV" ]; then
-            nohup bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-        else
-            nohup openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-        fi
-        disown 2>/dev/null || true
-    fi
-    
-    sleep 3
-    
-    # 检查服务状态（多种方式）
+    # 检查服务状态
     local port=18789
     local service_running=false
     if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
         service_running=true
     elif lsof -ti :$port > /dev/null 2>&1; then
         service_running=true
-    elif openclaw health > /dev/null 2>&1; then
-        service_running=true
     fi
     
     if [ "$service_running" = true ]; then
-        log_info "Gateway 已在后台启动！"
+        log_info "Gateway 已重启！"
         echo ""
         
         # 获取并显示 Dashboard URL（带 token）
@@ -336,24 +293,9 @@ restart_gateway_for_channel() {
     else
         log_warn "Gateway 可能未正常启动"
         echo ""
-        
-        # 尝试多个日志来源
-        echo -e "${YELLOW}诊断信息:${NC}"
+        echo -e "${YELLOW}命令输出:${NC}"
+        echo "$restart_output" | head -10 | sed 's/^/  /'
         echo ""
-        
-        # 1. 临时日志
-        if [ -s /tmp/openclaw-gateway.log ]; then
-            echo -e "${CYAN}启动日志:${NC}"
-            tail -10 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
-            echo ""
-        fi
-        
-        # 2. OpenClaw 系统日志
-        echo -e "${CYAN}系统日志 (最近 5 条):${NC}"
-        openclaw logs 2>/dev/null | tail -5 | sed 's/^/  /' || echo "  (无法获取)"
-        echo ""
-        
-        # 3. 建议
         echo -e "${CYAN}建议:${NC}"
         echo "  • 运行 ${WHITE}openclaw doctor --fix${NC} 修复配置问题"
         echo "  • 运行 ${WHITE}openclaw gateway start${NC} 手动启动"
@@ -3748,32 +3690,12 @@ manage_service() {
                     echo ""
                     
                     if confirm "是否重启服务？" "n"; then
-                        # 调用重启逻辑
-                        openclaw gateway stop 2>/dev/null || true
-                        pkill -f "openclaw.*gateway" 2>/dev/null || true
-                        sleep 2
-                        
-                        ensure_openclaw_init
+                        # 使用官方 restart 命令
                         if [ -f "$OPENCLAW_ENV" ]; then
                             source "$OPENCLAW_ENV"
                         fi
-                        
-                        # 后台启动
-                        if command -v setsid &> /dev/null; then
-                            if [ -f "$OPENCLAW_ENV" ]; then
-                                setsid bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-                            else
-                                setsid openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-                            fi
-                        else
-                            if [ -f "$OPENCLAW_ENV" ]; then
-                                nohup bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-                            else
-                                nohup openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-                            fi
-                            disown 2>/dev/null || true
-                        fi
-                        sleep 3
+                        openclaw gateway restart 2>&1 | head -5
+                        sleep 2
                         log_info "服务已重启"
                     fi
                     
@@ -3948,24 +3870,7 @@ manage_service() {
             echo ""
             log_info "正在重启服务..."
             if command -v openclaw &> /dev/null; then
-                # 检查是否有 LaunchAgent 在管理服务
-                local has_launchagent=false
-                if launchctl list 2>/dev/null | grep -q "openclaw"; then
-                    has_launchagent=true
-                fi
-                
-                # 停止现有服务
-                openclaw gateway stop 2>/dev/null || true
-                pkill -f "openclaw.*gateway" 2>/dev/null || true
-                
-                # 确保端口释放
-                local port=18789
-                local port_pid=$(lsof -ti :$port 2>/dev/null | head -1)
-                if [ -n "$port_pid" ]; then
-                    kill -9 $port_pid 2>/dev/null || true
-                fi
-                sleep 2
-                
+                # 确保配置正确
                 ensure_openclaw_init
                 
                 # 加载环境变量
@@ -3973,38 +3878,19 @@ manage_service() {
                     source "$OPENCLAW_ENV"
                 fi
                 
-                # 根据是否有 LaunchAgent 选择启动方式
-                if [ "$has_launchagent" = true ]; then
-                    # 使用 openclaw gateway start 启动（会通过 LaunchAgent）
-                    log_info "通过 LaunchAgent 启动服务..."
-                    openclaw gateway start 2>&1 | tee /tmp/openclaw-gateway.log
-                else
-                    # 后台启动 Gateway（使用 setsid 完全脱离终端）
-                    if command -v setsid &> /dev/null; then
-                        if [ -f "$OPENCLAW_ENV" ]; then
-                            setsid bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-                        else
-                            setsid openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-                        fi
-                    else
-                        if [ -f "$OPENCLAW_ENV" ]; then
-                            nohup bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-                        else
-                            nohup openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-                        fi
-                        disown 2>/dev/null || true
-                    fi
-                fi
+                # 使用官方 restart 命令
+                local restart_output
+                restart_output=$(openclaw gateway restart 2>&1) || true
+                local restart_exit=$?
                 
-                sleep 3
+                sleep 2
                 
-                # 检查服务状态（多种方式）
+                # 检查服务状态
+                local port=18789
                 local service_running=false
                 if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
                     service_running=true
                 elif lsof -ti :$port > /dev/null 2>&1; then
-                    service_running=true
-                elif openclaw health > /dev/null 2>&1; then
                     service_running=true
                 fi
                 
@@ -4022,6 +3908,9 @@ manage_service() {
                     fi
                 else
                     log_error "重启失败"
+                    echo ""
+                    echo -e "${YELLOW}命令输出:${NC}"
+                    echo "$restart_output" | head -10 | sed 's/^/  /'
                     echo ""
                     
                     # 尝试多个日志来源
