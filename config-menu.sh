@@ -144,6 +144,87 @@ backup_config() {
     fi
 }
 
+# 确保插件被添加到 plugins.allow 数组中
+# 这是启用插件的关键步骤
+ensure_plugin_in_allow() {
+    local plugin_id="$1"
+    
+    if [ ! -f "$OPENCLAW_JSON" ]; then
+        log_warn "配置文件不存在: $OPENCLAW_JSON"
+        return 1
+    fi
+    
+    # 检查是否安装了 jq
+    if ! command -v jq &> /dev/null; then
+        log_warn "未安装 jq，尝试使用 Python 更新配置..."
+        python3 << PYEOF
+import json
+import os
+
+config_path = os.path.expanduser("$OPENCLAW_JSON")
+plugin_id = "$plugin_id"
+
+try:
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+    
+    # 确保 plugins 结构存在
+    if 'plugins' not in config:
+        config['plugins'] = {'allow': [], 'entries': {}}
+    if 'allow' not in config['plugins']:
+        config['plugins']['allow'] = []
+    if 'entries' not in config['plugins']:
+        config['plugins']['entries'] = {}
+    
+    # 添加到 allow 列表
+    if plugin_id not in config['plugins']['allow']:
+        config['plugins']['allow'].append(plugin_id)
+        print(f"已将 {plugin_id} 添加到 plugins.allow")
+    
+    # 确保 entries 中也启用
+    config['plugins']['entries'][plugin_id] = {'enabled': True}
+    
+    # 确保 channels.xxx 存在（使用安全的默认策略，不设置 enabled）
+    if 'channels' not in config:
+        config['channels'] = {}
+    if plugin_id not in config['channels']:
+        config['channels'][plugin_id] = {'dmPolicy': 'pairing', 'groupPolicy': 'allowlist'}
+    
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    
+except Exception as e:
+    print(f"更新配置失败: {e}")
+    exit(1)
+PYEOF
+        return $?
+    fi
+    
+    # 使用 jq 更新配置
+    local tmp_file=$(mktemp)
+    
+    # 确保 plugins 和 channels 结构存在，并添加到 allow 列表
+    jq --arg plugin "$plugin_id" '
+        .plugins //= {"allow": [], "entries": {}} |
+        .plugins.allow //= [] |
+        .plugins.entries //= {} |
+        .channels //= {} |
+        .channels[$plugin] //= {"dmPolicy": "pairing", "groupPolicy": "allowlist"} |
+        if (.plugins.allow | index($plugin)) then . else .plugins.allow += [$plugin] end |
+        .plugins.entries[$plugin] = {"enabled": true}
+    ' "$OPENCLAW_JSON" > "$tmp_file"
+    
+    if [ $? -eq 0 ] && [ -s "$tmp_file" ]; then
+        mv "$tmp_file" "$OPENCLAW_JSON"
+        log_info "已将 $plugin_id 添加到 plugins.allow"
+        return 0
+    else
+        rm -f "$tmp_file"
+        log_error "更新 plugins.allow 失败"
+        return 1
+    fi
+}
+
 # 从环境变量文件读取配置
 get_env_value() {
     local key=$1
@@ -2809,6 +2890,7 @@ config_telegram() {
             # 启用 Telegram 插件
             echo -e "${YELLOW}启用 Telegram 插件...${NC}"
             openclaw plugins enable telegram 2>/dev/null || true
+            ensure_plugin_in_allow "telegram"
             
             # 添加 Telegram channel
             echo -e "${YELLOW}添加 Telegram 账号...${NC}"
@@ -2900,6 +2982,7 @@ config_discord() {
             # 启用 Discord 插件
             echo -e "${YELLOW}启用 Discord 插件...${NC}"
             openclaw plugins enable discord 2>/dev/null || true
+            ensure_plugin_in_allow "discord"
             
             # 添加 Discord channel
             echo -e "${YELLOW}添加 Discord 账号...${NC}"
@@ -2974,6 +3057,7 @@ config_whatsapp() {
         echo ""
         log_info "启用 WhatsApp 插件..."
         openclaw plugins enable whatsapp 2>/dev/null || true
+        ensure_plugin_in_allow "whatsapp"
         
         echo ""
         log_info "正在启动 WhatsApp 登录向导..."
@@ -3022,6 +3106,7 @@ config_slack() {
             # 启用 Slack 插件
             echo -e "${YELLOW}启用 Slack 插件...${NC}"
             openclaw plugins enable slack 2>/dev/null || true
+            ensure_plugin_in_allow "slack"
             
             # 添加 Slack channel
             echo -e "${YELLOW}添加 Slack 账号...${NC}"
@@ -3092,6 +3177,7 @@ config_wechat() {
         
         if confirm "是否启用微信插件？"; then
             openclaw plugins enable wechat 2>/dev/null || true
+            ensure_plugin_in_allow "wechat"
             log_info "微信插件已启用"
             
             if confirm "是否重启 Gateway？" "y"; then
@@ -3147,6 +3233,7 @@ config_imessage() {
         echo ""
         log_info "启用 iMessage 插件..."
         openclaw plugins enable imessage 2>/dev/null || true
+        ensure_plugin_in_allow "imessage"
         
         # 添加 iMessage channel
         echo ""
@@ -3664,16 +3751,19 @@ manage_service() {
                     log_info "已加载环境变量"
                 fi
                 
-                # 先验证配置是否有效
-                log_info "验证配置..."
+                # 先运行 doctor --fix 确保配置有效（与重启保持一致）
+                log_info "检查并修复配置..."
+                yes | openclaw doctor --fix > /dev/null 2>&1 || true
+                
+                # 验证修复后的配置
                 local config_check=$(openclaw doctor 2>&1 | head -5)
                 if echo "$config_check" | grep -qi "Config invalid"; then
-                    log_error "配置无效，请先修复配置"
+                    log_error "配置无效，无法自动修复"
                     echo ""
                     echo -e "${YELLOW}错误详情:${NC}"
                     echo "$config_check" | head -10
                     echo ""
-                    echo -e "${CYAN}建议运行: openclaw doctor --fix${NC}"
+                    echo -e "${CYAN}请手动运行: openclaw doctor --fix${NC}"
                     press_enter
                     manage_service
                     return
@@ -3727,10 +3817,49 @@ manage_service() {
                 else
                     log_error "启动失败"
                     echo ""
-                    echo -e "${YELLOW}错误日志:${NC}"
-                    tail -10 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
+                    
+                    # 显示日志文件内容
+                    if [ -s /tmp/openclaw-gateway.log ]; then
+                        echo -e "${YELLOW}错误日志:${NC}"
+                        tail -15 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
+                    else
+                        echo -e "${YELLOW}日志文件为空，尝试前台启动获取错误信息...${NC}"
+                        echo ""
+                        # 尝试前台启动一次获取错误信息
+                        if [ -f "$OPENCLAW_ENV" ]; then
+                            source "$OPENCLAW_ENV"
+                        fi
+                        echo -e "${CYAN}运行: openclaw gateway --port 18789${NC}"
+                        echo ""
+                        # 使用 timeout 限制运行时间，捕获错误输出
+                        if command -v timeout &> /dev/null; then
+                            timeout 5 openclaw gateway --port 18789 2>&1 | head -20 | sed 's/^/  /' || true
+                        else
+                            # macOS 没有 timeout，用 perl 模拟
+                            perl -e 'alarm 5; exec @ARGV' openclaw gateway --port 18789 2>&1 | head -20 | sed 's/^/  /' || true
+                        fi
+                    fi
+                    
                     echo ""
-                    echo -e "${CYAN}建议运行: openclaw doctor --fix${NC}"
+                    echo -e "${CYAN}━━━ 诊断信息 ━━━${NC}"
+                    echo ""
+                    
+                    # 运行 doctor 获取配置状态
+                    echo -e "${YELLOW}配置检查:${NC}"
+                    openclaw doctor 2>&1 | head -15 | sed 's/^/  /'
+                    echo ""
+                    
+                    # 检查端口是否被占用
+                    local port_pid=$(lsof -ti :18789 2>/dev/null | head -1)
+                    if [ -n "$port_pid" ]; then
+                        echo -e "${YELLOW}⚠️  端口 18789 被占用 (PID: $port_pid)${NC}"
+                        echo -e "  运行 ${WHITE}kill $port_pid${NC} 释放端口"
+                    fi
+                    
+                    echo ""
+                    echo -e "${CYAN}建议:${NC}"
+                    echo -e "  1. 运行 ${WHITE}openclaw doctor --fix${NC} 修复配置"
+                    echo -e "  2. 运行 ${WHITE}openclaw gateway${NC} 手动启动查看详细错误"
                 fi
             else
                 log_error "OpenClaw 未安装"
@@ -3930,6 +4059,18 @@ ensure_openclaw_init() {
     local current_mode=$(openclaw config get gateway.mode 2>/dev/null)
     if [ -z "$current_mode" ] || [ "$current_mode" = "undefined" ]; then
         openclaw config set gateway.mode local 2>/dev/null || true
+    fi
+    
+    # 检查 gateway.auth 配置，如果是 token 模式但没有 token，则自动生成
+    local auth_mode=$(openclaw config get gateway.auth 2>/dev/null)
+    if [ "$auth_mode" = "token" ]; then
+        local auth_token=$(openclaw config get gateway.auth.token 2>/dev/null)
+        if [ -z "$auth_token" ] || [ "$auth_token" = "undefined" ]; then
+            # 自动生成一个随机 token
+            local new_token=$(openssl rand -hex 32 2>/dev/null || cat /dev/urandom | head -c 32 | xxd -p 2>/dev/null || date +%s%N | sha256sum | head -c 64)
+            openclaw config set gateway.auth.token "$new_token" 2>/dev/null || true
+            log_info "已自动生成 Gateway Auth Token"
+        fi
     fi
 }
 

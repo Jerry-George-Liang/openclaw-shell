@@ -327,6 +327,18 @@ init_openclaw_config() {
     if check_command openclaw; then
         openclaw config set gateway.mode local 2>/dev/null || true
         log_info "Gateway 模式已设置为 local"
+        
+        # 检查 gateway.auth 配置，如果是 token 模式但没有 token，则自动生成
+        local auth_mode=$(openclaw config get gateway.auth 2>/dev/null)
+        if [ "$auth_mode" = "token" ]; then
+            local auth_token=$(openclaw config get gateway.auth.token 2>/dev/null)
+            if [ -z "$auth_token" ] || [ "$auth_token" = "undefined" ]; then
+                # 自动生成一个随机 token
+                local new_token=$(openssl rand -hex 32 2>/dev/null || cat /dev/urandom | head -c 32 | xxd -p 2>/dev/null || date +%s%N | sha256sum | head -c 64)
+                openclaw config set gateway.auth.token "$new_token" 2>/dev/null || true
+                log_info "已自动生成 Gateway Auth Token"
+            fi
+        fi
     fi
 }
 
