@@ -3719,12 +3719,74 @@ manage_service() {
         1)
             echo ""
             if command -v openclaw &> /dev/null; then
-                # 检测端口是否被占用
+                # 先检查服务是否已经在运行
                 local port=18789
+                local service_already_running=false
+                
+                if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
+                    service_already_running=true
+                elif lsof -ti :$port > /dev/null 2>&1; then
+                    # 检查是不是 openclaw 进程占用的端口
+                    local port_process=$(lsof -ti :$port 2>/dev/null | head -1 | xargs ps -p 2>/dev/null | grep -i openclaw)
+                    if [ -n "$port_process" ]; then
+                        service_already_running=true
+                    fi
+                fi
+                
+                if [ "$service_already_running" = true ]; then
+                    echo -e "${GREEN}✓ 服务已经在运行中！${NC}"
+                    echo ""
+                    
+                    # 获取并显示 Dashboard URL
+                    local dashboard_url=$(openclaw dashboard --no-open 2>/dev/null | grep -E "^https?://" | head -1)
+                    if [ -n "$dashboard_url" ]; then
+                        echo -e "${GREEN}Dashboard URL (带授权 token):${NC}"
+                        echo -e "  ${WHITE}$dashboard_url${NC}"
+                    else
+                        echo -e "${YELLOW}提示: 运行 ${WHITE}openclaw dashboard${NC} 获取访问 URL"
+                    fi
+                    echo ""
+                    
+                    if confirm "是否重启服务？" "n"; then
+                        # 调用重启逻辑
+                        openclaw gateway stop 2>/dev/null || true
+                        pkill -f "openclaw.*gateway" 2>/dev/null || true
+                        sleep 2
+                        
+                        ensure_openclaw_init
+                        if [ -f "$OPENCLAW_ENV" ]; then
+                            source "$OPENCLAW_ENV"
+                        fi
+                        
+                        # 后台启动
+                        if command -v setsid &> /dev/null; then
+                            if [ -f "$OPENCLAW_ENV" ]; then
+                                setsid bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
+                            else
+                                setsid openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
+                            fi
+                        else
+                            if [ -f "$OPENCLAW_ENV" ]; then
+                                nohup bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
+                            else
+                                nohup openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
+                            fi
+                            disown 2>/dev/null || true
+                        fi
+                        sleep 3
+                        log_info "服务已重启"
+                    fi
+                    
+                    press_enter
+                    manage_service
+                    return
+                fi
+                
+                # 检测端口是否被其他进程占用
                 local port_pid=$(lsof -ti :$port 2>/dev/null | head -1)
                 
                 if [ -n "$port_pid" ]; then
-                    echo -e "${YELLOW}检测到端口 $port 已被占用 (PID: $port_pid)${NC}"
+                    echo -e "${YELLOW}检测到端口 $port 被其他进程占用 (PID: $port_pid)${NC}"
                     if confirm "是否停止占用端口的进程？" "y"; then
                         openclaw gateway stop > /dev/null 2>&1 || true
                         sleep 1
