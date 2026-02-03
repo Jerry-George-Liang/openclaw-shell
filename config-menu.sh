@@ -260,17 +260,11 @@ restart_gateway_for_channel() {
     
     sleep 2
     
-    # 检查服务状态
-    local port=18789
-    local service_running=false
-    if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
-        service_running=true
-    elif lsof -ti :$port > /dev/null 2>&1; then
-        service_running=true
-    fi
+    # 使用端口检测判断服务是否启动成功（更可靠）
+    local gateway_pid=$(lsof -ti :18789 2>/dev/null | head -1)
     
-    if [ "$service_running" = true ]; then
-        log_info "Gateway 已重启！"
+    if [ -n "$gateway_pid" ]; then
+        log_info "Gateway 已重启！(PID: $gateway_pid)"
         echo ""
         
         # 获取并显示 Dashboard URL（带 token）
@@ -380,101 +374,6 @@ test_ai_connection() {
         echo "  其他诊断命令:"
         echo "    openclaw doctor"
         echo "    openclaw models status"
-        return 1
-    fi
-}
-
-# HTTP 直接测试 (备用)
-test_ai_connection_http() {
-    local provider=$1
-    local api_key=$2
-    local model=$3
-    local base_url=$4
-    
-    echo ""
-    echo -e "${CYAN}━━━ HTTP 直接测试 ━━━${NC}"
-    echo ""
-    
-    echo -e "${YELLOW}正在测试 API 连接...${NC}"
-    echo ""
-    
-    local test_url=""
-    local response=""
-    
-    case "$provider" in
-        anthropic)
-            # 如果配置了自定义 base_url，使用 OpenAI 兼容格式
-            if [ -n "$base_url" ]; then
-                test_url="${base_url}/v1/chat/completions"
-                [[ "$base_url" == */v1 ]] && test_url="${base_url}/chat/completions"
-                
-                response=$(curl -s -w "\n%{http_code}" -X POST "$test_url" \
-                    -H "Content-Type: application/json" \
-                    -H "Authorization: Bearer $api_key" \
-                    -d "{\"model\": \"$model\", \"messages\": [{\"role\": \"user\", \"content\": \"Say OK\"}], \"max_tokens\": 50}" 2>/dev/null)
-            else
-                test_url="https://api.anthropic.com/v1/messages"
-                response=$(curl -s -w "\n%{http_code}" -X POST "$test_url" \
-                    -H "Content-Type: application/json" -H "x-api-key: $api_key" -H "anthropic-version: 2023-06-01" \
-                    -d "{\"model\": \"$model\", \"max_tokens\": 50, \"messages\": [{\"role\": \"user\", \"content\": \"Say OK\"}]}" 2>/dev/null)
-            fi
-            ;;
-        google)
-            test_url="https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$api_key"
-            response=$(curl -s -w "\n%{http_code}" -X POST "$test_url" \
-                -H "Content-Type: application/json" \
-                -d "{\"contents\": [{\"parts\":[{\"text\": \"Say OK\"}]}]}" 2>/dev/null)
-            ;;
-        ollama)
-            test_ollama_connection "$base_url" "$model"
-            return $?
-            ;;
-        *)
-            test_url="${base_url:-https://api.openai.com/v1}/chat/completions"
-            response=$(curl -s -w "\n%{http_code}" -X POST "$test_url" \
-                -H "Content-Type: application/json" -H "Authorization: Bearer $api_key" \
-                -d "{\"model\": \"$model\", \"messages\": [{\"role\": \"user\", \"content\": \"Say OK\"}], \"max_tokens\": 50}" 2>/dev/null)
-            ;;
-    esac
-    
-    local http_code=$(echo "$response" | tail -n1)
-    local response_body=$(echo "$response" | sed '$d')
-    
-    echo ""
-    if [ "$http_code" = "200" ]; then
-        log_info "API 连接测试成功！(HTTP $http_code)"
-        
-        if command -v python3 &> /dev/null; then
-            local ai_response=$(echo "$response_body" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    if 'choices' in d: print(d['choices'][0].get('message', {}).get('content', '')[:100])
-    elif 'content' in d: print(d['content'][0].get('text', '')[:100])
-    elif 'candidates' in d: print(d['candidates'][0]['content']['parts'][0]['text'][:100])
-except: print('')
-" 2>/dev/null)
-            [ -n "$ai_response" ] && echo -e "  AI 响应: ${GREEN}$ai_response${NC}"
-        fi
-        return 0
-    else
-        log_error "API 连接测试失败 (HTTP $http_code)"
-        
-        if command -v python3 &> /dev/null; then
-            local error_msg=$(echo "$response_body" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    if 'error' in d:
-        err = d['error']
-        if isinstance(err, dict): print(err.get('message', str(err))[:200])
-        else:
-            print(str(err)[:200])
-except:
-    print('无法解析错误')
-" 2>/dev/null)
-            echo -e "  错误: ${RED}$error_msg${NC}"
-        fi
         return 1
     fi
 }
@@ -972,9 +871,10 @@ show_status() {
     if command -v openclaw &> /dev/null; then
         echo -e "  ${GREEN}✓${NC} OpenClaw 已安装: $(openclaw --version 2>/dev/null || echo 'unknown')"
         
-        # 检查服务运行状态
-        if pgrep -f "openclaw" > /dev/null 2>&1; then
-            echo -e "  ${GREEN}●${NC} 服务状态: ${GREEN}运行中${NC}"
+        # 使用端口检测判断服务运行状态（更可靠）
+        local status_pid=$(lsof -ti :18789 2>/dev/null | head -1)
+        if [ -n "$status_pid" ]; then
+            echo -e "  ${GREEN}●${NC} 服务状态: ${GREEN}运行中${NC} (PID: $status_pid)"
         else
             echo -e "  ${RED}●${NC} 服务状态: ${RED}已停止${NC}"
         fi
@@ -1286,32 +1186,53 @@ config_openai() {
     echo ""
     echo -e "${CYAN}选择模型:${NC}"
     echo ""
-    print_menu_item "1" "GPT-4o (推荐)" "⭐"
-    print_menu_item "2" "GPT-4o-mini (经济)" "⚡"
-    print_menu_item "3" "GPT-4 Turbo" "🚀"
-    print_menu_item "4" "o1-preview (推理)" "🧠"
-    print_menu_item "5" "自定义模型名称" "✏️"
+    print_menu_item "1" "GPT-5 (推荐)" "⭐"
+    print_menu_item "2" "GPT-5-mini (经济)" "⚡"
+    print_menu_item "3" "GPT-4o" "🚀"
+    print_menu_item "4" "GPT-4o-mini" "💰"
+    print_menu_item "5" "o1-preview (推理)" "🧠"
+    print_menu_item "6" "自定义模型名称" "✏️"
     echo ""
     
-    read -p "$(echo -e "${YELLOW}请选择 [1-5] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
+    read -p "$(echo -e "${YELLOW}请选择 [1-6] (默认: 1): ${NC}")" model_choice < "$TTY_INPUT"
     model_choice=${model_choice:-1}
     
     case $model_choice in
-        1) model="gpt-4o" ;;
-        2) model="gpt-4o-mini" ;;
-        3) model="gpt-4-turbo" ;;
-        4) model="o1-preview" ;;
-        5) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
-        *) model="gpt-4o" ;;
+        1) model="gpt-5" ;;
+        2) model="gpt-5-mini" ;;
+        3) model="gpt-4o" ;;
+        4) model="gpt-4o-mini" ;;
+        5) model="o1-preview" ;;
+        6) read -p "$(echo -e "${YELLOW}输入模型名称: ${NC}")" model < "$TTY_INPUT" ;;
+        *) model="gpt-5" ;;
     esac
     
+    # 如果使用自定义 API 地址，询问 API 类型
+    local api_type=""
+    if [ -n "$base_url" ]; then
+        echo ""
+        echo -e "${CYAN}选择 API 兼容格式:${NC}"
+        echo ""
+        print_menu_item "1" "openai-responses (OpenAI 官方 Responses API)" "🔵"
+        print_menu_item "2" "openai-completions (兼容 /v1/chat/completions)" "🟢"
+        echo ""
+        echo -e "${GRAY}提示: 大多数第三方服务使用 openai-completions 格式${NC}"
+        echo ""
+        read -p "$(echo -e "${YELLOW}选择 API 格式 [1-2] (默认: 2): ${NC}")" api_type_choice < "$TTY_INPUT"
+        case $api_type_choice in
+            1) api_type="openai-responses" ;;
+            *) api_type="openai-completions" ;;
+        esac
+    fi
+    
     # 保存到 OpenClaw 环境变量配置
-    save_openclaw_ai_config "openai" "$api_key" "$model" "$base_url"
+    save_openclaw_ai_config "openai" "$api_key" "$model" "$base_url" "$api_type"
     
     echo ""
     log_info "OpenAI GPT 配置完成！"
     log_info "模型: $model"
     [ -n "$base_url" ] && log_info "API 地址: $base_url" || log_info "API 地址: 官方"
+    [ -n "$api_type" ] && log_info "API 格式: $api_type"
     
     # 询问是否测试
     echo ""
@@ -2356,7 +2277,6 @@ config_minimax() {
     
     # 获取当前配置
     local current_key=$(get_env_value "MINIMAX_API_KEY")
-    local official_url="https://api.minimax.chat/v1"
     
     # 显示当前配置
     echo -e "${CYAN}MiniMax 是中国领先的 AI 公司，提供大语言模型服务${NC}"
@@ -2370,8 +2290,9 @@ config_minimax() {
     fi
     echo ""
     
-    echo -e "${CYAN}官方 API: ${WHITE}$official_url${NC}"
-    echo -e "${GRAY}获取 Key: https://platform.minimax.chat/${NC}"
+    echo -e "${CYAN}获取 API Key:${NC}"
+    echo -e "  🌍 国际版: ${WHITE}https://platform.minimax.io/${NC}"
+    echo -e "  🇨🇳 国内版: ${WHITE}https://platform.minimaxi.com/${NC}"
     echo ""
     print_divider
     echo ""
@@ -3636,9 +3557,10 @@ manage_service() {
     print_divider
     echo ""
     
-    # 检查服务状态
-    if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
-        echo -e "  当前状态: ${GREEN}● 运行中${NC}"
+    # 使用端口检测判断服务状态（更可靠）
+    local menu_status_pid=$(lsof -ti :18789 2>/dev/null | head -1)
+    if [ -n "$menu_status_pid" ]; then
+        echo -e "  当前状态: ${GREEN}● 运行中${NC} (PID: $menu_status_pid)"
     else
         echo -e "  当前状态: ${RED}● 已停止${NC}"
     fi
@@ -3661,22 +3583,12 @@ manage_service() {
         1)
             echo ""
             if command -v openclaw &> /dev/null; then
-                # 先检查服务是否已经在运行
+                # 先检查服务是否已经在运行（使用端口检测，更可靠）
                 local port=18789
-                local service_already_running=false
+                local running_pid=$(lsof -ti :$port 2>/dev/null | head -1)
                 
-                if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
-                    service_already_running=true
-                elif lsof -ti :$port > /dev/null 2>&1; then
-                    # 检查是不是 openclaw 进程占用的端口
-                    local port_process=$(lsof -ti :$port 2>/dev/null | head -1 | xargs ps -p 2>/dev/null | grep -i openclaw)
-                    if [ -n "$port_process" ]; then
-                        service_already_running=true
-                    fi
-                fi
-                
-                if [ "$service_already_running" = true ]; then
-                    echo -e "${GREEN}✓ 服务已经在运行中！${NC}"
+                if [ -n "$running_pid" ]; then
+                    echo -e "${GREEN}✓ 服务已经在运行中！${NC} (PID: $running_pid)"
                     echo ""
                     
                     # 获取并显示 Dashboard URL
@@ -3772,9 +3684,21 @@ manage_service() {
                     disown 2>/dev/null || true
                 fi
                 
-                sleep 3
-                if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
-                    log_info "服务已在后台启动"
+                # 等待服务启动，多次检测端口
+                local gateway_pid=""
+                local check_count=0
+                while [ $check_count -lt 5 ]; do
+                    sleep 1
+                    gateway_pid=$(lsof -ti :18789 2>/dev/null | head -1)
+                    if [ -n "$gateway_pid" ]; then
+                        break
+                    fi
+                    check_count=$((check_count + 1))
+                done
+                
+                # 最终检测：只要端口有服务就是成功（无论是刚启动的还是之前已运行的）
+                if [ -n "$gateway_pid" ]; then
+                    log_info "服务运行中 (PID: $gateway_pid)"
                     echo ""
                     
                     # 获取并显示 Dashboard URL（带 token）
@@ -3795,33 +3719,19 @@ manage_service() {
                     echo ""
                     echo -e "${CYAN}日志文件: /tmp/openclaw-gateway.log${NC}"
                     # 显示最近的日志
-                    echo ""
-                    echo -e "${GRAY}最近日志:${NC}"
-                    tail -5 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
+                    if [ -s /tmp/openclaw-gateway.log ]; then
+                        echo ""
+                        echo -e "${GRAY}最近日志:${NC}"
+                        tail -5 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
+                    fi
                 else
-                    log_error "启动失败"
+                    log_error "启动失败，端口 18789 无服务监听"
                     echo ""
                     
                     # 显示日志文件内容
                     if [ -s /tmp/openclaw-gateway.log ]; then
                         echo -e "${YELLOW}错误日志:${NC}"
                         tail -15 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
-                    else
-                        echo -e "${YELLOW}日志文件为空，尝试前台启动获取错误信息...${NC}"
-                        echo ""
-                        # 尝试前台启动一次获取错误信息
-                        if [ -f "$OPENCLAW_ENV" ]; then
-                            source "$OPENCLAW_ENV"
-                        fi
-                        echo -e "${CYAN}运行: openclaw gateway --port 18789${NC}"
-                        echo ""
-                        # 使用 timeout 限制运行时间，捕获错误输出
-                        if command -v timeout &> /dev/null; then
-                            timeout 5 openclaw gateway --port 18789 2>&1 | head -20 | sed 's/^/  /' || true
-                        else
-                            # macOS 没有 timeout，用 perl 模拟
-                            perl -e 'alarm 5; exec @ARGV' openclaw gateway --port 18789 2>&1 | head -20 | sed 's/^/  /' || true
-                        fi
                     fi
                     
                     echo ""
@@ -3831,14 +3741,6 @@ manage_service() {
                     # 运行 doctor 获取配置状态
                     echo -e "${YELLOW}配置检查:${NC}"
                     openclaw doctor 2>&1 | head -15 | sed 's/^/  /'
-                    echo ""
-                    
-                    # 检查端口是否被占用
-                    local port_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-                    if [ -n "$port_pid" ]; then
-                        echo -e "${YELLOW}⚠️  端口 18789 被占用 (PID: $port_pid)${NC}"
-                        echo -e "  运行 ${WHITE}kill $port_pid${NC} 释放端口"
-                    fi
                     
                     echo ""
                     echo -e "${CYAN}建议:${NC}"
@@ -3854,13 +3756,14 @@ manage_service() {
             log_info "正在停止服务..."
             if command -v openclaw &> /dev/null; then
                 openclaw gateway stop 2>/dev/null || true
-                # 确保进程被杀死
-                pkill -f "openclaw.*gateway" 2>/dev/null || true
                 sleep 1
-                if ! pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
+                # 使用端口检测判断服务是否已停止（更可靠）
+                local stop_pid=$(lsof -ti :18789 2>/dev/null | head -1)
+                if [ -z "$stop_pid" ]; then
                     log_info "服务已停止"
                 else
-                    log_warn "进程可能仍在运行"
+                    log_warn "服务可能仍在运行 (PID: $stop_pid)"
+                    echo -e "  运行 ${WHITE}kill $stop_pid${NC} 强制停止"
                 fi
             else
                 log_error "OpenClaw 未安装"
@@ -3885,17 +3788,11 @@ manage_service() {
                 
                 sleep 2
                 
-                # 检查服务状态
-                local port=18789
-                local service_running=false
-                if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
-                    service_running=true
-                elif lsof -ti :$port > /dev/null 2>&1; then
-                    service_running=true
-                fi
+                # 使用端口检测判断服务是否启动成功（更可靠）
+                local gateway_pid=$(lsof -ti :18789 2>/dev/null | head -1)
                 
-                if [ "$service_running" = true ]; then
-                    log_info "服务已重启"
+                if [ -n "$gateway_pid" ]; then
+                    log_info "服务已重启 (PID: $gateway_pid)"
                     echo ""
                     
                     # 获取并显示 Dashboard URL
@@ -4026,11 +3923,13 @@ ensure_openclaw_init() {
 }
 
 # 保存 AI 配置到 OpenClaw 环境变量
+# 参数: provider api_key model base_url [api_type]
 save_openclaw_ai_config() {
     local provider="$1"
     local api_key="$2"
     local model="$3"
     local base_url="$4"
+    local api_type="$5"  # 可选参数，用于指定 API 类型
     
     ensure_openclaw_init
     
@@ -4108,7 +4007,8 @@ EOF
             openclaw_model="anthropic-custom/$model"
         elif [ -n "$base_url" ] && [ "$provider" = "openai" ]; then
             use_custom_provider=true
-            configure_custom_provider "$provider" "$api_key" "$model" "$base_url" "$config_file"
+            # 传递 API 类型参数（如果已设置）
+            configure_custom_provider "$provider" "$api_key" "$model" "$base_url" "$config_file" "$api_type"
             openclaw_model="openai-custom/$model"
         else
             case "$provider" in
@@ -4185,12 +4085,14 @@ EOF
 }
 
 # 配置自定义 provider（用于支持自定义 API 地址）
+# 参数: provider api_key model base_url config_file [api_type]
 configure_custom_provider() {
     local provider="$1"
     local api_key="$2"
     local model="$3"
     local base_url="$4"
     local config_file="$5"
+    local custom_api_type="$6"  # 可选参数，用于覆盖默认 API 类型
     
     # 参数校验
     if [ -z "$model" ]; then
@@ -4215,10 +4117,15 @@ configure_custom_provider() {
     mkdir -p "$config_dir" 2>/dev/null || true
     
     # 确定 API 类型
-    # OpenClaw 支持: anthropic-messages, openai-responses
-    local api_type="openai-responses"
-    if [ "$provider" = "anthropic" ]; then
+    # OpenClaw 支持: anthropic-messages, openai-responses, openai-completions
+    # 如果传入了自定义 API 类型，使用传入的值；否则根据 provider 自动判断
+    local api_type=""
+    if [ -n "$custom_api_type" ]; then
+        api_type="$custom_api_type"
+    elif [ "$provider" = "anthropic" ]; then
         api_type="anthropic-messages"
+    else
+        api_type="openai-responses"
     fi
     local provider_id="${provider}-custom"
     

@@ -409,7 +409,8 @@ EOF
             openclaw_model="anthropic-custom/$AI_MODEL"
         elif [ -n "$BASE_URL" ] && [ "$AI_PROVIDER" = "openai" ]; then
             use_custom_provider=true
-            configure_custom_provider "$AI_PROVIDER" "$AI_KEY" "$AI_MODEL" "$BASE_URL" "$openclaw_json"
+            # 传递 API 类型参数（如果已设置）
+            configure_custom_provider "$AI_PROVIDER" "$AI_KEY" "$AI_MODEL" "$BASE_URL" "$openclaw_json" "$AI_API_TYPE"
             openclaw_model="openai-custom/$AI_MODEL"
         else
             case "$AI_PROVIDER" in
@@ -465,12 +466,14 @@ EOF
 }
 
 # 配置自定义 provider（用于支持自定义 API 地址）
+# 参数: provider api_key model base_url config_file [api_type]
 configure_custom_provider() {
     local provider="$1"
     local api_key="$2"
     local model="$3"
     local base_url="$4"
     local config_file="$5"
+    local custom_api_type="$6"  # 可选参数，用于覆盖默认 API 类型
     
     # 参数校验
     if [ -z "$model" ]; then
@@ -495,9 +498,14 @@ configure_custom_provider() {
     mkdir -p "$config_dir" 2>/dev/null || true
     
     # 确定 API 类型
-    local api_type="openai-responses"
-    if [ "$provider" = "anthropic" ]; then
+    # 如果传入了自定义 API 类型，使用传入的值；否则根据 provider 自动判断
+    local api_type=""
+    if [ -n "$custom_api_type" ]; then
+        api_type="$custom_api_type"
+    elif [ "$provider" = "anthropic" ]; then
         api_type="anthropic-messages"
+    else
+        api_type="openai-responses"
     fi
     local provider_id="${provider}-custom"
     
@@ -904,17 +912,33 @@ setup_ai_provider() {
             echo -en "${YELLOW}输入 API Key: ${NC}"; read AI_KEY < "$TTY_INPUT"
             echo ""
             echo "选择模型:"
-            echo "  1) gpt-4o (推荐)"
-            echo "  2) gpt-4o-mini (经济)"
-            echo "  3) gpt-4-turbo"
-            echo "  4) 自定义模型名称"
-            echo -en "${YELLOW}选择模型 [1-4] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
+            echo "  1) gpt-5 (推荐)"
+            echo "  2) gpt-5-mini (经济)"
+            echo "  3) gpt-4o"
+            echo "  4) gpt-4o-mini"
+            echo "  5) 自定义模型名称"
+            echo -en "${YELLOW}选择模型 [1-5] (默认: 1): ${NC}"; read model_choice < "$TTY_INPUT"
             case $model_choice in
-                2) AI_MODEL="gpt-4o-mini" ;;
-                3) AI_MODEL="gpt-4-turbo" ;;
-                4) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
-                *) AI_MODEL="gpt-4o" ;;
+                2) AI_MODEL="gpt-5-mini" ;;
+                3) AI_MODEL="gpt-4o" ;;
+                4) AI_MODEL="gpt-4o-mini" ;;
+                5) echo -en "${YELLOW}输入模型名称: ${NC}"; read AI_MODEL < "$TTY_INPUT" ;;
+                *) AI_MODEL="gpt-5" ;;
             esac
+            # 如果使用自定义 API 地址，询问 API 类型
+            AI_API_TYPE=""
+            if [ -n "$BASE_URL" ]; then
+                echo ""
+                echo -e "${CYAN}选择 API 兼容格式:${NC}"
+                echo "  1) openai-responses (OpenAI 官方 Responses API)"
+                echo "  2) openai-completions (兼容 /v1/chat/completions 端点)"
+                echo -e "${GRAY}提示: 大多数第三方服务使用 openai-completions 格式${NC}"
+                echo -en "${YELLOW}选择 API 格式 [1-2] (默认: 2): ${NC}"; read api_type_choice < "$TTY_INPUT"
+                case $api_type_choice in
+                    1) AI_API_TYPE="openai-responses" ;;
+                    *) AI_API_TYPE="openai-completions" ;;
+                esac
+            fi
             ;;
         3)
             AI_PROVIDER="deepseek"
@@ -1151,21 +1175,40 @@ test_api_connection() {
             exit_code=$?
         fi
         
-        # 过滤掉 Node.js 警告信息
+        # 过滤掉 Node.js 警告信息和正常的系统日志
         result=$(echo "$result" | grep -v "ExperimentalWarning" | grep -v "at emitExperimentalWarning" | grep -v "at ModuleLoader" | grep -v "at callTranslator")
         
+        # 保存原始结果用于显示
+        local display_result="$result"
+        
+        # 过滤掉正常的插件加载日志和 Doctor warnings 用于错误判断
+        local filtered_result=$(echo "$result" | grep -v "\[plugins\]" | grep -v "Doctor warnings" | grep -v "Registered.*tools" | grep -v "State dir migration" | grep -v "^│" | grep -v "^◇" | grep -v "^$")
+        
         # 检查结果是否为空
-        if [ -z "$result" ]; then
-            result="(无输出 - 命令可能立即退出)"
-            exit_code=1
+        if [ -z "$filtered_result" ]; then
+            # 如果过滤后为空，但原始结果不为空，可能只是系统日志
+            if [ -n "$display_result" ]; then
+                # 检查是否有实际的 AI 响应内容（不是日志）
+                if echo "$display_result" | grep -qE "^[^│◇\[\]]"; then
+                    filtered_result="$display_result"
+                else
+                    filtered_result="(只有系统日志，没有 AI 响应)"
+                    exit_code=1
+                fi
+            else
+                filtered_result="(无输出 - 命令可能立即退出)"
+                exit_code=1
+            fi
         fi
         
-        if [ $exit_code -eq 0 ] && ! echo "$result" | grep -qiE "error|failed|401|403|Unknown model|超时"; then
+        # 判断是否成功：退出码为 0 且没有真正的错误信息
+        # 注意：只匹配真正的错误，排除正常日志
+        if [ $exit_code -eq 0 ] && ! echo "$filtered_result" | grep -qiE "^error:|api error|401|403|Unknown model|超时|Incorrect API|authentication failed"; then
             test_passed=true
             echo -e "${GREEN}✓ OpenClaw AI 测试成功！${NC}"
             echo ""
-            # 显示 AI 响应（过滤掉空行）
-            local ai_response=$(echo "$result" | grep -v "^$" | head -5)
+            # 显示 AI 响应（过滤掉空行和系统日志）
+            local ai_response=$(echo "$display_result" | grep -v "^$" | grep -v "\[plugins\]" | grep -v "Doctor" | grep -v "^│" | grep -v "^◇" | head -5)
             if [ -n "$ai_response" ]; then
                 echo -e "  ${CYAN}AI 响应:${NC}"
                 echo "$ai_response" | sed 's/^/    /'
@@ -1174,19 +1217,35 @@ test_api_connection() {
             retry_count=$((retry_count + 1))
             echo -e "${RED}✗ OpenClaw AI 测试失败 (退出码: $exit_code)${NC}"
             echo ""
-            echo -e "  ${RED}错误:${NC}"
-            echo "$result" | head -5 | sed 's/^/    /'
+            
+            # 显示过滤后的错误信息（排除正常日志）
+            local error_display=$(echo "$filtered_result" | head -5)
+            if [ -n "$error_display" ] && [ "$error_display" != "(只有系统日志，没有 AI 响应)" ]; then
+                echo -e "  ${RED}错误信息:${NC}"
+                echo "$error_display" | sed 's/^/    /'
+            else
+                echo -e "  ${YELLOW}没有收到 AI 响应，可能是 API 配置问题${NC}"
+            fi
             echo ""
+            
+            # 显示完整原始输出（用于调试）
+            if [ -n "$display_result" ]; then
+                echo -e "  ${GRAY}完整输出 (前 8 行):${NC}"
+                echo "$display_result" | head -8 | sed 's/^/    /'
+                echo ""
+            fi
             
             if [ $retry_count -lt $max_retries ]; then
                 echo -e "${YELLOW}剩余 $((max_retries - retry_count)) 次机会${NC}"
                 echo ""
                 
                 # 提供修复建议
-                if echo "$result" | grep -q "Unknown model"; then
+                if echo "$filtered_result" | grep -qi "Unknown model"; then
                     echo -e "${YELLOW}提示: 模型不被识别，建议运行: openclaw configure --section model${NC}"
-                elif echo "$result" | grep -q "401\|Incorrect API key"; then
-                    echo -e "${YELLOW}提示: API 配置可能不正确${NC}"
+                elif echo "$filtered_result" | grep -qi "401\|Incorrect API key\|authentication"; then
+                    echo -e "${YELLOW}提示: API Key 可能不正确${NC}"
+                elif echo "$filtered_result" | grep -qi "只有系统日志"; then
+                    echo -e "${YELLOW}提示: API 可能没有正确响应，请检查 API 地址和模型名称${NC}"
                 fi
                 echo ""
                 
@@ -1219,69 +1278,6 @@ test_api_connection() {
     
     return 0
 }
-
-# HTTP 直接测试 (备用，用于安装前验证 API Key)
-test_api_connection_http() {
-    echo ""
-    echo -e "${YELLOW}正在验证 API Key...${NC}"
-    echo ""
-    
-    local test_url=""
-    local RESPONSE=""
-    
-    case "$AI_PROVIDER" in
-        anthropic)
-            if [ -n "$BASE_URL" ]; then
-                test_url="${BASE_URL}/v1/chat/completions"
-                [[ "$BASE_URL" == */v1 ]] && test_url="${BASE_URL}/chat/completions"
-                RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$test_url" \
-                    -H "Content-Type: application/json" -H "Authorization: Bearer $AI_KEY" \
-                    -d "{\"model\": \"$AI_MODEL\", \"messages\": [{\"role\": \"user\", \"content\": \"OK\"}], \"max_tokens\": 10}" 2>/dev/null)
-            else
-                test_url="https://api.anthropic.com/v1/messages"
-                RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$test_url" \
-                    -H "Content-Type: application/json" -H "x-api-key: $AI_KEY" -H "anthropic-version: 2023-06-01" \
-                    -d "{\"model\": \"$AI_MODEL\", \"max_tokens\": 10, \"messages\": [{\"role\": \"user\", \"content\": \"OK\"}]}" 2>/dev/null)
-            fi
-            ;;
-        google)
-            test_url="https://generativelanguage.googleapis.com/v1beta/models/$AI_MODEL:generateContent?key=$AI_KEY"
-            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$test_url" \
-                -H "Content-Type: application/json" -d "{\"contents\": [{\"parts\":[{\"text\": \"OK\"}]}]}" 2>/dev/null)
-            ;;
-        *)
-            test_url="${BASE_URL:-https://api.openai.com/v1}/chat/completions"
-            RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$test_url" \
-                -H "Content-Type: application/json" -H "Authorization: Bearer $AI_KEY" \
-                -d "{\"model\": \"$AI_MODEL\", \"messages\": [{\"role\": \"user\", \"content\": \"OK\"}], \"max_tokens\": 10}" 2>/dev/null)
-            ;;
-    esac
-    
-    local HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-    local RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
-    
-    if [ "$HTTP_CODE" = "200" ]; then
-        echo -e "${GREEN}✓ API Key 验证成功！${NC}"
-        return 0
-    else
-        echo -e "${RED}✗ API Key 验证失败 (HTTP $HTTP_CODE)${NC}"
-        if command -v python3 &> /dev/null; then
-            local error_msg=$(echo "$RESPONSE_BODY" | python3 -c "
-import sys, json
-try:
-    d = json.load(sys.stdin)
-    if 'error' in d:
-        err = d['error']
-        if isinstance(err, dict): print(err.get('message', str(err))[:200])
-        else: print(str(err)[:200])
-except: print('')
-" 2>/dev/null)
-            [ -n "$error_msg" ] && echo -e "  错误: $error_msg"
-        fi
-        return 1
-    fi
-}
-
 
 # ================================ 身份配置 ================================
 
@@ -1429,13 +1425,13 @@ start_openclaw_service() {
         log_info "已加载环境变量"
     fi
     
-    # 检查是否已有服务在运行
-    if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
-        log_warn "OpenClaw Gateway 已在运行"
+    # 使用端口检测判断是否已有服务在运行（更可靠）
+    local existing_pid=$(lsof -ti :18789 2>/dev/null | head -1)
+    if [ -n "$existing_pid" ]; then
+        log_warn "OpenClaw Gateway 已在运行 (PID: $existing_pid)"
         echo ""
         if confirm "是否重启服务？" "y"; then
             openclaw gateway stop 2>/dev/null || true
-            pkill -f "openclaw.*gateway" 2>/dev/null || true
             sleep 2
         else
             return 0
@@ -1461,16 +1457,18 @@ start_openclaw_service() {
         disown 2>/dev/null || true
     fi
     
+    # 等待服务启动
     sleep 3
     
-    # 检查启动状态
-    if pgrep -f "openclaw.*gateway" > /dev/null 2>&1; then
+    # 使用端口检测判断服务是否启动成功（更可靠）
+    local gateway_pid=$(lsof -ti :18789 2>/dev/null | head -1)
+    if [ -n "$gateway_pid" ]; then
         echo ""
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${GREEN}           ✓ OpenClaw Gateway 已启动！${NC}"
+        echo -e "${GREEN}           ✓ OpenClaw Gateway 已启动！(PID: $gateway_pid)${NC}"
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
-        echo -e "  ${CYAN}日志文件:${NC} /tmp/openclaw-gateway.log"
+        echo -e "  ${CYAN}查看状态:${NC} openclaw gateway status"
         echo -e "  ${CYAN}查看日志:${NC} tail -f /tmp/openclaw-gateway.log"
         echo -e "  ${CYAN}停止服务:${NC} openclaw gateway stop"
         echo ""
@@ -1496,27 +1494,45 @@ run_config_menu() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     
-    # 总是尝试从 GitHub 下载最新版本
-    log_step "从 GitHub 下载最新配置菜单..."
-    if curl -fsSL "$GITHUB_RAW_URL/config-menu.sh" -o "$config_menu_path.tmp"; then
-        # 下载成功，替换旧文件
-        mv "$config_menu_path.tmp" "$config_menu_path"
-        chmod +x "$config_menu_path"
-        log_info "配置菜单已更新: $config_menu_path"
+    # 检查本地是否已有配置菜单
+    local has_local_menu=false
+    if [ -f "$local_config_menu" ]; then
+        has_local_menu=true
+        menu_script="$local_config_menu"
+    elif [ -f "$config_menu_path" ]; then
+        has_local_menu=true
         menu_script="$config_menu_path"
-    else
-        # 下载失败，尝试使用本地已有的版本
-        rm -f "$config_menu_path.tmp" 2>/dev/null
-        log_warn "下载最新版本失败，尝试使用本地版本..."
-        
-        if [ -f "$local_config_menu" ]; then
-            menu_script="$local_config_menu"
-            log_info "使用本地配置菜单: $local_config_menu"
-        elif [ -f "$config_menu_path" ]; then
-            menu_script="$config_menu_path"
-            log_info "使用已有的配置菜单: $config_menu_path"
+    fi
+    
+    # 如果本地已有配置菜单，询问是否更新
+    if [ "$has_local_menu" = true ]; then
+        log_info "检测到本地配置菜单: $menu_script"
+        echo ""
+        if confirm "是否从 GitHub 更新到最新版本？" "n"; then
+            log_step "从 GitHub 下载最新配置菜单..."
+            if curl -fsSL "$GITHUB_RAW_URL/config-menu.sh" -o "$config_menu_path.tmp"; then
+                mv "$config_menu_path.tmp" "$config_menu_path"
+                chmod +x "$config_menu_path"
+                log_info "配置菜单已更新: $config_menu_path"
+                menu_script="$config_menu_path"
+            else
+                rm -f "$config_menu_path.tmp" 2>/dev/null
+                log_warn "下载失败，继续使用本地版本"
+            fi
         else
-            log_error "配置菜单不可用"
+            log_info "使用本地配置菜单"
+        fi
+    else
+        # 本地没有配置菜单，从 GitHub 下载
+        log_step "从 GitHub 下载配置菜单..."
+        if curl -fsSL "$GITHUB_RAW_URL/config-menu.sh" -o "$config_menu_path.tmp"; then
+            mv "$config_menu_path.tmp" "$config_menu_path"
+            chmod +x "$config_menu_path"
+            log_info "配置菜单已下载: $config_menu_path"
+            menu_script="$config_menu_path"
+        else
+            rm -f "$config_menu_path.tmp" 2>/dev/null
+            log_error "配置菜单下载失败"
             echo -e "${YELLOW}你可以稍后手动下载运行:${NC}"
             echo "  curl -fsSL $GITHUB_RAW_URL/config-menu.sh -o config-menu.sh && bash config-menu.sh"
             return 1
