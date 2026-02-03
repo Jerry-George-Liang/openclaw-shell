@@ -3573,10 +3573,13 @@ manage_service() {
     print_menu_item "5" "查看日志" "📋"
     print_menu_item "6" "运行诊断并修复" "🔍"
     print_menu_item "7" "安装为系统服务" "⚙️"
+    echo ""
+    echo -e "  ${RED}[8]${NC} 🗑️  卸载 OpenClaw"
+    echo ""
     print_menu_item "0" "返回主菜单" "↩️"
     echo ""
     
-    echo -en "${YELLOW}请选择 [0-7]: ${NC}"
+    echo -en "${YELLOW}请选择 [0-8]: ${NC}"
     read choice < "$TTY_INPUT"
     
     case $choice in
@@ -3881,6 +3884,105 @@ manage_service() {
             else
                 log_error "OpenClaw 未安装"
             fi
+            ;;
+        8)
+            echo ""
+            echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${RED}           ⚠️  卸载 OpenClaw${NC}"
+            echo -e "${RED}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            echo -e "${YELLOW}此操作将:${NC}"
+            echo "  1. 停止 OpenClaw 服务"
+            echo "  2. 卸载 openclaw npm 包"
+            echo "  3. 可选删除配置目录 (~/.openclaw)"
+            echo ""
+            
+            if ! confirm "确定要卸载 OpenClaw 吗？" "n"; then
+                log_info "已取消卸载"
+                press_enter
+                manage_service
+                return
+            fi
+            
+            echo ""
+            
+            # 1. 停止服务
+            log_info "正在停止服务..."
+            if command -v openclaw &> /dev/null; then
+                openclaw gateway stop 2>/dev/null || true
+                sleep 1
+            fi
+            
+            # 使用端口检测确保服务已停止
+            local uninstall_pid=$(lsof -ti :18789 2>/dev/null | head -1)
+            if [ -n "$uninstall_pid" ]; then
+                log_warn "强制停止服务 (PID: $uninstall_pid)..."
+                kill -9 $uninstall_pid 2>/dev/null || true
+                sleep 1
+            fi
+            log_info "服务已停止"
+            
+            # 2. 卸载系统服务（如果已安装）
+            if [ -f "$HOME/Library/LaunchAgents/com.openclaw.agent.plist" ]; then
+                log_info "移除 macOS 系统服务..."
+                launchctl unload "$HOME/Library/LaunchAgents/com.openclaw.agent.plist" 2>/dev/null || true
+                rm -f "$HOME/Library/LaunchAgents/com.openclaw.agent.plist" 2>/dev/null || true
+            fi
+            
+            if [ -f "/etc/systemd/system/openclaw.service" ]; then
+                log_info "移除 systemd 系统服务..."
+                sudo systemctl stop openclaw 2>/dev/null || true
+                sudo systemctl disable openclaw 2>/dev/null || true
+                sudo rm -f /etc/systemd/system/openclaw.service 2>/dev/null || true
+                sudo systemctl daemon-reload 2>/dev/null || true
+            fi
+            
+            # 3. 卸载 npm 包
+            log_info "正在卸载 openclaw..."
+            npm uninstall -g openclaw 2>&1 | grep -v "^npm" | head -5 || true
+            
+            if ! command -v openclaw &> /dev/null; then
+                log_info "OpenClaw 已卸载"
+            else
+                log_warn "卸载可能未完全成功，请手动运行: npm uninstall -g openclaw"
+            fi
+            
+            # 4. 询问是否删除配置
+            echo ""
+            if [ -d "$HOME/.openclaw" ]; then
+                echo -e "${YELLOW}检测到配置目录: ~/.openclaw${NC}"
+                echo ""
+                if confirm "是否删除配置目录？（包含所有配置和数据）" "n"; then
+                    # 备份提示
+                    echo ""
+                    if confirm "是否先备份到 ~/openclaw_backup_$(date +%Y%m%d)？" "y"; then
+                        local backup_dir="$HOME/openclaw_backup_$(date +%Y%m%d)"
+                        cp -r "$HOME/.openclaw" "$backup_dir" 2>/dev/null || true
+                        log_info "配置已备份到: $backup_dir"
+                    fi
+                    
+                    rm -rf "$HOME/.openclaw"
+                    log_info "配置目录已删除"
+                else
+                    log_info "保留配置目录 (~/.openclaw)"
+                fi
+            fi
+            
+            echo ""
+            echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo -e "${GREEN}           ✓ OpenClaw 卸载完成${NC}"
+            echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            echo -e "${CYAN}如需重新安装，请运行:${NC}"
+            echo "  curl -fsSL https://raw.githubusercontent.com/miaoxworld/OpenClawInstaller/main/install.sh | bash"
+            echo ""
+            echo -e "${CYAN}或下载桌面版:${NC}"
+            echo "  https://github.com/miaoxworld/openclaw-manager"
+            echo ""
+            
+            press_enter
+            # 卸载后返回主菜单
+            return
             ;;
         0)
             return

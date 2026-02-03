@@ -35,7 +35,26 @@
 
 ## 🚀 快速开始
 
-### 方式一：一键安装（推荐）
+### 🖥️ 桌面版 OpenClaw Manager（推荐）
+
+如果你更喜欢图形界面，推荐使用 **OpenClaw Manager** 桌面应用：
+
+<p align="center">
+  <a href="https://github.com/miaoxworld/openclaw-manager">
+    <img src="https://img.shields.io/badge/下载桌面版-OpenClaw%20Manager-blue?style=for-the-badge&logo=github" alt="Download">
+  </a>
+</p>
+
+- 🎨 **现代化 UI** - 基于 Tauri 2.0 + React + TypeScript + Rust 构建
+- 📊 **实时监控** - 仪表盘查看服务状态、内存、运行时间
+- 🔧 **可视化配置** - AI 模型、消息渠道一键配置
+- 💻 **跨平台** - 支持 macOS、Windows、Linux
+
+👉 **下载地址**: [github.com/miaoxworld/openclaw-manager](https://github.com/miaoxworld/openclaw-manager)
+
+---
+
+### 方式一：一键安装（命令行版）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/miaoxworld/OpenClawInstaller/main/install.sh | bash
@@ -495,7 +514,8 @@ rm -rf ~/.openclaw
 
 - [OpenClaw 官网](https://clawd.bot)
 - [官方文档](https://clawd.bot/docs)
-- [安装工具仓库](https://github.com/miaoxworld/OpenClawInstaller)
+- [🖥️ OpenClaw Manager 桌面版](https://github.com/miaoxworld/openclaw-manager) - 图形界面管理工具
+- [安装工具仓库](https://github.com/miaoxworld/OpenClawInstaller) - 命令行版本
 - [OpenClaw 主仓库](https://github.com/openclaw/openclaw)
 - [社区讨论](https://github.com/miaoxworld/OpenClawInstaller/discussions)
 
