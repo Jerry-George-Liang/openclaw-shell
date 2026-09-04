@@ -2,22 +2,21 @@
 # OpenClaw Docker 镜像
 # 
 # 构建: docker build -t openclaw .
-# 运行: docker run -d --name openclaw -v ~/.openclaw:/root/.openclaw openclaw
+# 运行: docker run -d --name openclaw -v ~/.openclaw:/home/node/.openclaw openclaw
 # ============================================================
 
-FROM node:22-alpine
+ARG NODE_VERSION=24-bookworm-slim
+FROM node:${NODE_VERSION}
 
 LABEL maintainer="OpenClaw Community"
 LABEL description="OpenClaw - Your Personal AI Assistant"
 LABEL version="1.0.0"
 
-# 安装基础依赖
-RUN apk add --no-cache \
-    bash \
-    curl \
-    git \
-    jq \
-    tzdata
+# Debian slim 与 OpenClaw 官方容器基线一致，覆盖 amd64/arm64 并兼容原生模块。
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       bash ca-certificates curl git jq tini tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 # 设置时区
 ENV TZ=Asia/Shanghai
@@ -27,20 +26,26 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 WORKDIR /app
 
 # 安装 OpenClaw
-RUN npm install -g openclaw@latest
+ARG OPENCLAW_VERSION=2026.9.1
+RUN set -eux; \
+    if node -e 'const [major, minor] = process.argv[1].split(".").map(Number); process.exit(major > 11 || (major === 11 && minor >= 16) ? 0 : 1)' "$(npm --version)"; then \
+      npm install -g "openclaw@${OPENCLAW_VERSION}" --allow-scripts=openclaw; \
+    else \
+      npm install -g "openclaw@${OPENCLAW_VERSION}"; \
+    fi
 
-# 创建配置目录
-RUN mkdir -p /root/.openclaw/logs \
-    /root/.openclaw/data \
-    /root/.openclaw/skills \
-    /root/.openclaw/backups
+# 创建非 root 状态目录
+RUN mkdir -p /home/node/.openclaw/logs \
+    /home/node/.openclaw/data \
+    /home/node/.openclaw/skills \
+    /home/node/.openclaw/backups \
+    && chown -R node:node /home/node/.openclaw
 
-# 复制默认配置和技能
-COPY examples/config.example.yaml /root/.openclaw/config.yaml.example
-COPY examples/skills/ /root/.openclaw/skills/
+# 复制技能；配置由入口脚本按环境变量生成
+COPY --chown=node:node examples/skills/ /home/node/.openclaw/skills/
 
 # 设置卷挂载点
-VOLUME ["/root/.openclaw"]
+VOLUME ["/home/node/.openclaw"]
 
 # 暴露端口
 EXPOSE 18789
@@ -53,5 +58,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["openclaw", "start", "--daemon"]
+USER node
+
+ENTRYPOINT ["tini", "--", "docker-entrypoint.sh"]
+CMD ["openclaw", "gateway", "run", "--bind", "lan", "--port", "18789"]

@@ -29,8 +29,9 @@
 
 | 项目 | 要求 |
 |------|------|
-| 操作系统 | macOS 12+ / Ubuntu 20.04+ / Debian 11+ / CentOS 8+ |
-| Node.js | v22 或更高版本 |
+| 操作系统 | macOS 12+（Intel/Apple Silicon）/ Ubuntu 20.04+ / Debian 11+ / CentOS 8+；Windows 建议 WSL2 |
+| CPU 架构 | 原生安装支持 x86_64/amd64、arm64/aarch64；Docker 使用对应的 multi-arch Node 基础镜像 |
+| Node.js | 22.22.3+、24.15.0+、25.9.0+ 或 26+（不支持 Node 23） |
 | 内存 | 最低 2GB，推荐 4GB+ |
 | 磁盘空间 | 最低 1GB |
 
@@ -39,7 +40,7 @@
 ### 方式一：一键安装（命令行版）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cwj526/OpenClawInstaller/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/install.sh | bash
 ```
 
 脚本会自动检测当前环境：
@@ -56,11 +57,13 @@ curl -fsSL https://raw.githubusercontent.com/cwj526/OpenClawInstaller/main/insta
 5. **自动启动 OpenClaw 服务**
 6. 可选打开配置菜单进行详细配置（渠道等）
 
+> Windows 原生环境请先在 PowerShell 运行官方安装器：`iwr -useb https://openclaw.ai/install.ps1 | iex`，或使用 WSL2 运行本 Bash 脚本。Git Bash/Cygwin 会被脚本明确拒绝，避免半安装状态。
+
 ### 方式二：手动安装
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/cwj526/OpenClawInstaller.git
+git clone https://github.com/tuziapi/OpenClawInstaller.git
 cd OpenClawInstaller
 
 # 2. 添加执行权限
@@ -79,7 +82,7 @@ export PATH="$HOME/.local/bin:$PATH"
 如果你已经装好了 OpenClaw，只想把 Tuzi API 配进去，仍然使用同一条命令即可：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cwj526/OpenClawInstaller/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/install.sh | bash
 ```
 
 脚本检测到已有安装后，会自动跳过：
@@ -117,7 +120,7 @@ curl -fsSL https://raw.githubusercontent.com/cwj526/OpenClawInstaller/main/insta
 
 ```bash
 # 手动启动服务
-source ~/.openclaw/env && openclaw gateway
+source ~/.openclaw/env && openclaw gateway run
 
 # 后台启动服务
 openclaw gateway start
@@ -126,7 +129,7 @@ openclaw gateway start
 bash ~/.openclaw/config-menu.sh
 
 # 如果本地没有配置菜单，可下载到固定位置后运行
-curl -fsSL https://raw.githubusercontent.com/cwj526/OpenClawInstaller/main/config-menu.sh -o ~/.openclaw/config-menu.sh && bash ~/.openclaw/config-menu.sh
+curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/config-menu.sh -o ~/.openclaw/config-menu.sh && bash ~/.openclaw/config-menu.sh
 ```
 
 #### 可选：安装 `tuzi-skills`
@@ -281,7 +284,7 @@ npx skills add tuziapi/tuzi-skills --agent openclaw --yes
    - `im:message:send_as_bot` (发送消息)
    - `im:chat:readonly` (读取会话信息)
 6. 发布应用：版本管理与发布 → 创建版本 → 发布
-7. **在配置菜单中配置飞书**：输入 App ID 和 App Secret，启动 OpenClaw 服务
+7. **在配置菜单中配置飞书**：启动官方登录向导完成授权，再启动 OpenClaw 服务
 8. 配置"事件订阅"（使用长连接）：
    - 进入：事件与回调 → 选择「**使用长连接接收事件**」
    - 添加事件：`im.message.receive_v1`（接收消息）
@@ -319,7 +322,7 @@ openclaw gateway restart
 openclaw gateway status
 
 # 前台运行（用于调试）
-openclaw gateway
+openclaw gateway run
 
 # 查看日志
 openclaw logs
@@ -426,7 +429,16 @@ export OPENAI_BASE_URL=https://your-api-proxy.com/v1  # 可选
 
 1. **不要在主工作电脑上部署** - 建议使用专用服务器或虚拟机
 2. **使用 AWS/GCP/Azure 免费实例** - 隔离环境更安全
-3. **Docker 部署** - 提供额外的隔离层
+3. **Docker 部署** - 提供额外的隔离层；默认只映射到 `127.0.0.1`，并且必须设置 Gateway Token
+
+```bash
+export OPENCLAW_GATEWAY_TOKEN="$(openssl rand -hex 32)"
+docker compose up -d --build
+```
+
+如需让局域网设备访问，需明确修改 `docker-compose.yml` 的端口映射；不得移除 Gateway Token。
+
+> Linux 使用绑定目录时，容器以非 root 的 `node` 用户（UID 1000）运行。首次启动前请执行 `mkdir -p ~/.openclaw`；若宿主用户不是 UID 1000，请执行 `sudo chown -R 1000:1000 ~/.openclaw`，或将 Compose 的绑定目录改为 Docker named volume。macOS/Windows Docker Desktop 通常由文件共享层处理权限，但仍需在 Docker Desktop 中允许工作目录访问。
 
 ### 权限控制
 
@@ -469,13 +481,14 @@ export TELEGRAM_BOT_TOKEN="xxx"
 
 ```bash
 # macOS
-brew install node@22
-brew link --overwrite node@22
+brew install node
 
-# Ubuntu/Debian
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+# Ubuntu/Debian（Node 24 LTS）
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
+
+Windows 请使用 PowerShell 官方安装器或 WSL2，不要在 Git Bash/Cygwin 中尝试执行本脚本。
 
 ### Q: 启动后无法连接？
 
@@ -492,12 +505,18 @@ sudo apt-get install -y nodejs
 ### Q: 如何更新到最新版本？
 
 ```bash
-# 使用 npm 更新
-npm update -g openclaw
+# 使用官方更新流程
+openclaw update
 
 # 或使用配置菜单
 bash ~/.openclaw/config-menu.sh
-# 选择 [7] 高级设置 → [7] 更新 OpenClaw
+# 选择 [8] 高级设置 → [6] 更新 OpenClaw
+```
+
+如果菜单提示“安装来源无法识别”，说明 OpenClaw 是通过无法追踪的 npm 回退路径安装的。请先重新运行官方安装器建立包管理器关联，再执行更新；不要手动更新 npm 全局包来绕过官方更新流程：
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash -s -- --install-method npm --no-prompt --no-onboard --verify
 ```
 
 ### Q: 如何备份数据？
@@ -540,12 +559,12 @@ rm -rf ~/.openclaw
 
 ## 🔗 相关链接
 
-- [OpenClaw 官网](https://clawd.bot)
-- [官方文档](https://clawd.bot/docs)
+- [OpenClaw 官网](https://openclaw.ai)
+- [官方文档](https://docs.openclaw.ai)
 - [🖥️ OpenClaw Manager 桌面版](https://github.com/cwj526/openclaw-manager) - 图形界面管理工具
-- [安装工具仓库](https://github.com/cwj526/OpenClawInstaller) - 命令行版本
+- [安装工具仓库](https://github.com/tuziapi/OpenClawInstaller) - 命令行版本
 - [OpenClaw 主仓库](https://github.com/openclaw/openclaw)
-- [社区讨论](https://github.com/cwj526/OpenClawInstaller/discussions)
+- [社区讨论](https://github.com/tuziapi/OpenClawInstaller/discussions)
 
 ---
 

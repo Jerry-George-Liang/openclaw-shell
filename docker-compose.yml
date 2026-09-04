@@ -2,39 +2,37 @@
 # OpenClaw Docker Compose 配置
 # 
 # 使用方法:
-#   1. 复制 examples/config.example.yaml 到 ~/.openclaw/config.yaml
-#   2. 编辑配置文件，填入你的 API Key
-#   3. 运行: docker-compose up -d
-#   4. 查看日志: docker-compose logs -f
+#   1. 生成并导出 OPENCLAW_GATEWAY_TOKEN
+#   2. 运行: docker compose up -d
+#   3. 查看日志: docker compose logs -f
 # ============================================================
-
-version: '3.8'
 
 services:
   openclaw:
-    build: .
-    image: openclaw:latest
+    build:
+      context: .
+      args:
+        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-2026.9.1}
+        NODE_VERSION: ${NODE_VERSION:-24-bookworm-slim}
+    image: openclaw:${OPENCLAW_VERSION:-2026.9.1}
     container_name: openclaw
     restart: unless-stopped
     
-    # 环境变量（可选，优先级高于配置文件）
+    # Gateway 必须启用认证；密钥通过 .env 或 shell 环境注入
     environment:
-      - TZ=Asia/Shanghai
-      # 可以通过环境变量设置敏感信息
-      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      # - OPENAI_API_KEY=${OPENAI_API_KEY}
-      # - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      TZ: Asia/Shanghai
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?set OPENCLAW_GATEWAY_TOKEN}
     
     # 端口映射
     ports:
-      - "18789:18789"
+      - "127.0.0.1:18789:18789"
     
     # 卷挂载
     volumes:
       # 配置和数据持久化
-      - ~/.openclaw:/root/.openclaw
+      - ~/.openclaw:/home/node/.openclaw
       # 可选：挂载自定义技能目录
-      # - ./custom-skills:/root/.openclaw/skills
+      # - ./custom-skills:/home/node/.openclaw/skills
     
     # 健康检查
     healthcheck:

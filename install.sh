@@ -5,13 +5,13 @@
 # ║   🦞 OpenClaw 一键部署脚本 v1.0.0                                          ║
 # ║   智能 AI 助手部署工具 - 支持多平台多模型                                    ║
 # ║                                                                           ║
-# ║   GitHub: https://github.com/cwj526/OpenClawInstaller                     ║
-# ║   官方文档: https://clawd.bot/docs                                         ║
+# ║   GitHub: https://github.com/tuziapi/OpenClawInstaller                    ║
+# ║   官方文档: https://docs.openclaw.ai                                      ║
 # ║                                                                           ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 #
 # 使用方法:
-#   curl -fsSL https://raw.githubusercontent.com/cwj526/OpenClawInstaller/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/install.sh | bash
 #   或本地执行: chmod +x install.sh && ./install.sh
 #
 
@@ -42,11 +42,14 @@ NC='\033[0m' # 无颜色
 
 # ================================ 配置变量 ================================
 OPENCLAW_VERSION="latest"
+OFFICIAL_INSTALL_URL="https://openclaw.ai/install.sh"
 CONFIG_DIR="$HOME/.openclaw"
 CONFIG_MENU_PATH="$CONFIG_DIR/config-menu.sh"
 TUZI_CACHE_DIR="$CONFIG_DIR/cache"
-MIN_NODE_VERSION=22
-GITHUB_REPO="cwj526/OpenClawInstaller"
+MIN_NODE_22="22.22.3"
+MIN_NODE_24="24.15.0"
+MIN_NODE_25="25.9.0"
+GITHUB_REPO="tuziapi/OpenClawInstaller"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main"
 INSTALL_MODE=""
 FORCE_REINSTALL="false"
@@ -84,6 +87,122 @@ log_error() {
 
 log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
+}
+
+version_at_least() {
+    local current="$1"
+    local required="$2"
+    local current_major current_minor current_patch
+    local required_major required_minor required_patch
+
+    IFS=. read -r current_major current_minor current_patch <<< "${current%%-*}"
+    IFS=. read -r required_major required_minor required_patch <<< "${required%%-*}"
+    current_minor="${current_minor:-0}"
+    current_patch="${current_patch:-0}"
+    required_minor="${required_minor:-0}"
+    required_patch="${required_patch:-0}"
+
+    [ "$current_major" -gt "$required_major" ] ||
+        { [ "$current_major" -eq "$required_major" ] && [ "$current_minor" -gt "$required_minor" ]; } ||
+        { [ "$current_major" -eq "$required_major" ] && [ "$current_minor" -eq "$required_minor" ] && [ "$current_patch" -ge "$required_patch" ]; }
+}
+
+run_privileged() {
+    if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        log_error "需要 root 权限，但当前设备没有 sudo"
+        return 1
+    fi
+}
+
+generate_gateway_token() {
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex 32 2>/dev/null && return 0
+    fi
+    if [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
+        od -An -N32 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n' && return 0
+    fi
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import secrets; print(secrets.token_hex(32))' && return 0
+    fi
+    return 1
+}
+
+is_supported_node_version() {
+    local version="${1#v}"
+    local major="${version%%.*}"
+
+    case "$major" in
+        22) version_at_least "$version" "$MIN_NODE_22" ;;
+        24) version_at_least "$version" "$MIN_NODE_24" ;;
+        25) version_at_least "$version" "$MIN_NODE_25" ;;
+        2[6-9]|[3-9][0-9]|[1-9][0-9][0-9]*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+npm_supports_allow_scripts() {
+    local npm_version
+    npm_version=$(npm --version 2>/dev/null || echo "0.0.0")
+    version_at_least "$npm_version" "11.16.0"
+}
+
+run_npm_openclaw_install() {
+    local npm_prefix="${1:-}"
+    local install_args=(-g "openclaw@$OPENCLAW_VERSION")
+
+    if npm_supports_allow_scripts; then
+        install_args+=(--allow-scripts=openclaw)
+    fi
+    if [ -n "$npm_prefix" ]; then
+        install_args+=(--prefix "$npm_prefix")
+    fi
+
+    npm install "${install_args[@]}"
+}
+
+begin_config_transaction() {
+    local config_file="$1"
+    local backup_file="${config_file}.openclaw-installer-backup.$$"
+    if [ -f "$config_file" ]; then
+        cp -p "$config_file" "$backup_file"
+    else
+        : > "$backup_file"
+    fi
+    printf '%s' "$backup_file"
+}
+
+rollback_config_transaction() {
+    local config_file="$1"
+    local backup_file="$2"
+    if [ -s "$backup_file" ]; then
+        cp -p "$backup_file" "$config_file"
+    else
+        rm -f "$config_file"
+    fi
+    rm -f "$backup_file"
+}
+
+commit_config_transaction() {
+    rm -f "$1"
+}
+
+ensure_json_config_parseable() {
+    local config_file="$1"
+    [ ! -f "$config_file" ] && return 0
+    if command -v node >/dev/null 2>&1; then
+        node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$config_file" >/dev/null 2>&1 && return 0
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$config_file" >/dev/null 2>&1 && return 0
+    else
+        log_error "无法解析 OpenClaw 配置：需要 node 或 python3"
+        return 1
+    fi
+    log_error "OpenClaw 配置不是严格 JSON，已停止写入以保护现有配置: $config_file"
+    return 1
 }
 
 run_with_timeout() {
@@ -486,6 +605,16 @@ confirm() {
 
 detect_os() {
     log_step "检测操作系统..."
+
+    ARCH=$(uname -m 2>/dev/null || echo unknown)
+    case "$ARCH" in
+        x86_64|amd64|aarch64|arm64|armv7l|armv8l)
+            log_info "检测到 CPU 架构: $ARCH"
+            ;;
+        *)
+            log_warn "未验证的 CPU 架构: $ARCH；请确认 Node.js/OpenClaw 有对应构建"
+            ;;
+    esac
     
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         if [ -f /etc/os-release ]; then
@@ -496,10 +625,10 @@ detect_os() {
         PACKAGE_MANAGER=""
         if command -v apt-get &> /dev/null; then
             PACKAGE_MANAGER="apt"
-        elif command -v yum &> /dev/null; then
-            PACKAGE_MANAGER="yum"
         elif command -v dnf &> /dev/null; then
             PACKAGE_MANAGER="dnf"
+        elif command -v yum &> /dev/null; then
+            PACKAGE_MANAGER="yum"
         elif command -v pacman &> /dev/null; then
             PACKAGE_MANAGER="pacman"
         fi
@@ -509,7 +638,7 @@ detect_os() {
         OS_VERSION=$(sw_vers -productVersion)
         PACKAGE_MANAGER="brew"
         log_info "检测到 macOS 系统: $OS_VERSION"
-    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
+    elif [[ "$OSTYPE" == msys* ]] || [[ "$OSTYPE" == mingw* ]] || [[ "$OSTYPE" == cygwin* ]]; then
         OS="windows"
         log_info "检测到 Windows 系统 (Git Bash/Cygwin)"
     else
@@ -874,41 +1003,57 @@ install_homebrew() {
 
 install_nodejs() {
     log_step "检查 Node.js..."
+
+    if [ "$OS" = "windows" ]; then
+        log_error "Windows 请在 PowerShell 运行官方安装器，或在 WSL2 中重新运行本脚本:"
+        echo "  iwr -useb https://openclaw.ai/install.ps1 | iex"
+        echo "  https://docs.openclaw.ai/install/windows"
+        exit 1
+    fi
     
     if check_command node; then
-        local node_version=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
-        if [ "$node_version" -ge "$MIN_NODE_VERSION" ]; then
+        local node_version
+        node_version=$(node -v | sed 's/^v//')
+        if is_supported_node_version "$node_version"; then
             log_info "Node.js 版本满足要求: $(node -v)"
             return 0
         else
-            log_warn "Node.js 版本过低: $(node -v)，需要 v$MIN_NODE_VERSION+"
+            log_warn "Node.js 版本不受当前 OpenClaw 支持: $(node -v)"
         fi
     fi
     
-    log_step "安装 Node.js $MIN_NODE_VERSION..."
+    log_step "安装受支持的 Node.js..."
     
     case "$OS" in
         macos)
             install_homebrew
-            brew install node@22
-            brew link --overwrite node@22
+            brew install node
             ;;
         ubuntu|debian)
-            curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-            sudo apt-get install -y nodejs
+            curl -fsSL https://deb.nodesource.com/setup_24.x | run_privileged bash
+            run_privileged apt-get install -y nodejs
             ;;
         centos|rhel|fedora)
-            curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash -
-            sudo yum install -y nodejs
+            curl -fsSL https://rpm.nodesource.com/setup_24.x | run_privileged bash -
+            if [ "$PACKAGE_MANAGER" = "dnf" ]; then
+                run_privileged dnf install -y nodejs
+            else
+                run_privileged yum install -y nodejs
+            fi
             ;;
         arch|manjaro)
-            sudo pacman -S nodejs npm --noconfirm
+            run_privileged pacman -S nodejs npm --noconfirm
             ;;
         *)
-            log_error "无法自动安装 Node.js，请手动安装 v$MIN_NODE_VERSION+"
+            log_error "无法自动安装 Node.js，请按 https://docs.openclaw.ai/install/node 安装受支持版本"
             exit 1
             ;;
     esac
+
+    if ! check_command node || ! is_supported_node_version "$(node -v | sed 's/^v//')"; then
+        log_error "Node.js 安装后版本仍不兼容: $(node -v 2>/dev/null || echo '未安装')"
+        exit 1
+    fi
     
     log_info "Node.js 安装完成: $(node -v)"
 }
@@ -922,13 +1067,17 @@ install_git() {
                 brew install git
                 ;;
             ubuntu|debian)
-                sudo apt-get update && sudo apt-get install -y git
+                run_privileged apt-get update && run_privileged apt-get install -y git
                 ;;
             centos|rhel|fedora)
-                sudo yum install -y git
+                if [ "$PACKAGE_MANAGER" = "dnf" ]; then
+                    run_privileged dnf install -y git
+                else
+                    run_privileged yum install -y git
+                fi
                 ;;
             arch|manjaro)
-                sudo pacman -S git --noconfirm
+                run_privileged pacman -S git --noconfirm
                 ;;
         esac
     fi
@@ -941,11 +1090,15 @@ install_dependencies() {
     # 安装基础依赖
     case "$OS" in
         ubuntu|debian)
-            sudo apt-get update
-            sudo apt-get install -y curl wget jq
+            run_privileged apt-get update
+            run_privileged apt-get install -y curl wget jq
             ;;
         centos|rhel|fedora)
-            sudo yum install -y curl wget jq
+            if [ "$PACKAGE_MANAGER" = "dnf" ]; then
+                run_privileged dnf install -y curl wget jq
+            else
+                run_privileged yum install -y curl wget jq
+            fi
             ;;
         macos)
             install_homebrew
@@ -980,27 +1133,32 @@ install_openclaw() {
         fi
     fi
     
-    # 优先尝试 npm 全局安装，失败时回退到用户目录安装
-    log_info "正在从 npm 安装 OpenClaw..."
-    if npm install -g openclaw@$OPENCLAW_VERSION --unsafe-perm; then
-        log_info "已完成全局安装"
+    # 官方安装器负责当前版本的安装与验证约定。
+    local official_installer
+    official_installer=$(mktemp "${TMPDIR:-/tmp}/openclaw-install.XXXXXX")
+    log_info "正在使用 OpenClaw 官方安装器..."
+    if curl --proto '=https' --tlsv1.2 -fsSL "$OFFICIAL_INSTALL_URL" -o "$official_installer" && \
+        bash "$official_installer" --install-method npm --version "$OPENCLAW_VERSION" --no-prompt --no-onboard --verify; then
+        rm -f "$official_installer"
+        log_info "官方安装器执行完成"
     else
-        log_warn "全局安装失败，正在切换到用户目录安装..."
+        rm -f "$official_installer"
+        log_warn "官方安装器失败，正在使用受控 npm 回退..."
         local npm_prefix="$HOME/.local"
         local npm_bin="$npm_prefix/bin"
-        mkdir -p "$npm_prefix"
-
-        if npm install -g openclaw@$OPENCLAW_VERSION --unsafe-perm --prefix "$npm_prefix"; then
-            ensure_path_export "export PATH=\"$npm_bin:\$PATH\""
-            print_path_activation_hint "$npm_bin"
+        if run_npm_openclaw_install; then
+            log_info "已完成 npm 全局安装"
         else
-            log_error "OpenClaw 安装失败"
-            echo ""
-            echo -e "${YELLOW}可尝试以下方案:${NC}"
-            echo "  1. 使用 sudo 重新运行安装脚本"
-            echo "  2. 手动执行: npm install -g openclaw@$OPENCLAW_VERSION --prefix \"$npm_prefix\""
-            echo "  3. 重新打开终端后确认 PATH 包含: $npm_bin"
-            exit 1
+            log_warn "npm 全局安装失败，正在切换到用户目录..."
+            mkdir -p "$npm_prefix"
+            if run_npm_openclaw_install "$npm_prefix"; then
+                ensure_path_export "export PATH=\"$npm_bin:\$PATH\""
+                print_path_activation_hint "$npm_bin"
+            else
+                log_error "OpenClaw 安装失败"
+                echo "请按 https://docs.openclaw.ai/install/installer 手动安装。"
+                exit 1
+            fi
         fi
     fi
 
@@ -1038,14 +1196,25 @@ init_openclaw_config() {
         log_info "Gateway 模式已设置为 local"
         
         # 检查 gateway.auth 配置，如果是 token 模式但没有 token，则自动生成
-        local auth_mode=$(openclaw config get gateway.auth 2>/dev/null)
+        local auth_mode=$(openclaw config get gateway.auth.mode 2>/dev/null)
+        if [ -z "$auth_mode" ] || [ "$auth_mode" = "undefined" ]; then
+            # 新配置默认采用 token；已有 password 配置交给用户显式选择模式。
+            if ! openclaw config get gateway.auth.password >/dev/null 2>&1; then
+                openclaw config set gateway.auth.mode token 2>/dev/null || true
+                auth_mode="token"
+            fi
+        fi
         if [ "$auth_mode" = "token" ]; then
             local auth_token=$(openclaw config get gateway.auth.token 2>/dev/null)
-            if [ -z "$auth_token" ] || [ "$auth_token" = "undefined" ]; then
-                # 自动生成一个随机 token
-                local new_token=$(openssl rand -hex 32 2>/dev/null || cat /dev/urandom | head -c 32 | xxd -p 2>/dev/null || date +%s%N | sha256sum | head -c 64)
-                openclaw config set gateway.auth.token "$new_token" 2>/dev/null || true
-                log_info "已自动生成 Gateway Auth Token"
+            if [ -z "$auth_token" ] || [ "$auth_token" = "undefined" ] || [[ "$auth_token" == Config\ path* ]]; then
+                local new_token
+                new_token=$(generate_gateway_token) || true
+                if [ -n "$new_token" ]; then
+                    openclaw config set gateway.auth.token "$new_token" 2>/dev/null || true
+                    log_info "已自动生成 Gateway Auth Token"
+                else
+                    log_warn "无法自动生成 Gateway Auth Token，请运行 openclaw doctor --generate-gateway-token"
+                fi
             fi
         fi
     fi
@@ -1746,10 +1915,17 @@ configure_tuzi_provider() {
     local base_url="${rest%%|*}"
     rest="${rest#*|}"
     local api_type="${rest%%|*}"
+    ensure_json_config_parseable "$config_file" || return 1
+    local config_backup
+    config_backup=$(begin_config_transaction "$config_file")
 
     if [ "$group" = "gaccode" ]; then
-        configure_gaccode_providers "$api_key" "$config_file" "$update_default"
-        return $?
+        if configure_gaccode_providers "$api_key" "$config_file" "$update_default"; then
+            commit_config_transaction "$config_backup"
+            return 0
+        fi
+        rollback_config_transaction "$config_file" "$config_backup"
+        return 1
     fi
 
     local config_success=false
@@ -1978,8 +2154,16 @@ with open(vars['config_file'], 'w') as f:
 
     if [ "$config_success" = false ]; then
         log_error "Tuzi Provider 写入失败（需要 node 或 python3）"
+        rollback_config_transaction "$config_file" "$config_backup"
         return 1
     fi
+
+    if check_command openclaw && ! openclaw config validate >/dev/null 2>&1; then
+        log_error "OpenClaw 配置校验失败，已恢复修改前配置"
+        rollback_config_transaction "$config_file" "$config_backup"
+        return 1
+    fi
+    commit_config_transaction "$config_backup"
 
     return 0
 }
@@ -1993,6 +2177,10 @@ configure_gaccode_providers() {
         log_error "GACCode 配置参数不完整"
         return 1
     fi
+    ensure_json_config_parseable "$config_file" || return 1
+
+    local config_backup
+    config_backup=$(begin_config_transaction "$config_file")
 
     local config_success=false
     local gac_claude_primary
@@ -2228,8 +2416,16 @@ with open(vars['config_file'], 'w') as f:
 
     if [ "$config_success" = false ]; then
         log_error "GACCode Provider 写入失败（需要 node 或 python3）"
+        rollback_config_transaction "$config_file" "$config_backup"
         return 1
     fi
+
+    if check_command openclaw && ! openclaw config validate >/dev/null 2>&1; then
+        log_error "OpenClaw 配置校验失败，已恢复修改前配置"
+        rollback_config_transaction "$config_file" "$config_backup"
+        return 1
+    fi
+    commit_config_transaction "$config_backup"
 
     return 0
 }
@@ -2354,16 +2550,12 @@ configure_openclaw_model() {
             openclaw_model="gac-claude/$(get_gac_claude_primary_model)"
         fi
         local set_result
-        set_result=$(openclaw models set "$openclaw_model" 2>&1) || true
-        local set_exit=$?
-
-        if [ $set_exit -eq 0 ]; then
+        if set_result=$(openclaw models set "$openclaw_model" 2>&1); then
             log_info "默认模型已设置为: $openclaw_model"
         else
-            log_warn "模型设置可能失败: $openclaw_model"
+            log_error "默认模型设置失败: $openclaw_model"
             echo -e "  ${GRAY}$set_result${NC}" | head -3
-            log_info "尝试使用 config set 设置模型..."
-            openclaw config set models.default "$openclaw_model" 2>/dev/null || true
+            return 1
         fi
     elif check_command openclaw; then
         log_info "已保留当前默认模型，新增 Provider: $provider_id/$AI_MODEL"
@@ -2704,7 +2896,7 @@ run_onboard_wizard() {
             
             if confirm "是否测试现有 API 连接？" "y"; then
                 # 获取当前模型
-                AI_MODEL=$(openclaw config get models.default 2>/dev/null | sed 's|.*/||')
+                AI_MODEL=$(openclaw config get agents.defaults.model.primary 2>/dev/null | sed 's|.*/||')
                 local tuzi_group
                 local tuzi_api_key
                 local tuzi_base_url
@@ -3102,74 +3294,14 @@ setup_identity() {
 
 setup_daemon() {
     if confirm "是否设置开机自启动？" "y"; then
-        log_step "配置系统服务..."
-        
-        case "$OS" in
-            macos)
-                setup_launchd
-                ;;
-            *)
-                setup_systemd
-                ;;
-        esac
+        log_step "使用 OpenClaw 官方命令配置系统服务..."
+        if openclaw gateway install; then
+            log_info "Gateway 系统服务已安装"
+        else
+            log_error "Gateway 系统服务安装失败"
+            return 1
+        fi
     fi
-}
-
-setup_systemd() {
-    cat > /tmp/openclaw.service << EOF
-[Unit]
-Description=OpenClaw AI Assistant
-After=network.target
-
-[Service]
-Type=simple
-User=$USER
-ExecStart=$(which openclaw) start --daemon
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    sudo mv /tmp/openclaw.service /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable openclaw
-    
-    log_info "Systemd 服务已配置"
-}
-
-setup_launchd() {
-    mkdir -p "$HOME/Library/LaunchAgents"
-    
-    cat > "$HOME/Library/LaunchAgents/com.openclaw.agent.plist" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.openclaw.agent</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$(which openclaw)</string>
-        <string>start</string>
-        <string>--daemon</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>$CONFIG_DIR/stdout.log</string>
-    <key>StandardErrorPath</key>
-    <string>$CONFIG_DIR/stderr.log</string>
-</dict>
-</plist>
-EOF
-
-    launchctl load "$HOME/Library/LaunchAgents/com.openclaw.agent.plist" 2>/dev/null || true
-    
-    log_info "LaunchAgent 已配置"
 }
 
 # ================================ 完成安装 ================================
@@ -3192,7 +3324,7 @@ print_success() {
     echo "  openclaw channels list   # 查看渠道列表"
     echo "  openclaw doctor          # 诊断问题"
     echo ""
-    echo -e "${PURPLE}📚 官方文档: https://clawd.bot/docs${NC}"
+    echo -e "${PURPLE}📚 官方文档: https://docs.openclaw.ai${NC}"
     echo -e "${PURPLE}💬 社区支持: https://github.com/$GITHUB_REPO/discussions${NC}"
     echo ""
 }
@@ -3261,10 +3393,8 @@ start_openclaw_service() {
         log_info "已加载环境变量"
     fi
     
-    # 使用端口检测判断是否已有服务在运行（更可靠）
-    local existing_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-    if [ -n "$existing_pid" ]; then
-        log_warn "OpenClaw Gateway 已在运行 (PID: $existing_pid)"
+    if openclaw health >/dev/null 2>&1; then
+        log_warn "OpenClaw Gateway 已在运行"
         echo ""
         if confirm "是否重启服务？" "y"; then
             openclaw gateway stop 2>/dev/null || true
@@ -3274,46 +3404,24 @@ start_openclaw_service() {
         fi
     fi
     
-    # 后台启动 Gateway（使用 setsid 完全脱离终端）
-    log_step "正在后台启动 Gateway..."
-    
-    if command -v setsid &> /dev/null; then
-        if [ -f "$env_file" ]; then
-            setsid bash -c "source $env_file && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-        else
-            setsid openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-        fi
-    else
-        # 备用方案：nohup + disown
-        if [ -f "$env_file" ]; then
-            nohup bash -c "source $env_file && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-        else
-            nohup openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-        fi
-        disown 2>/dev/null || true
-    fi
-    
-    # 等待服务启动
-    sleep 3
-    
-    # 使用端口检测判断服务是否启动成功（更可靠）
-    local gateway_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-    if [ -n "$gateway_pid" ]; then
+    log_step "正在启动 Gateway 系统服务..."
+    openclaw gateway install >/dev/null 2>&1 || true
+    if openclaw gateway start && sleep 2 && openclaw health >/dev/null 2>&1; then
         echo ""
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${GREEN}           ✓ OpenClaw Gateway 已启动！(PID: $gateway_pid)${NC}"
+        echo -e "${GREEN}           ✓ OpenClaw Gateway 已启动！${NC}"
         echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
         echo -e "  ${CYAN}查看状态:${NC} openclaw gateway status"
-        echo -e "  ${CYAN}查看日志:${NC} tail -f /tmp/openclaw-gateway.log"
+        echo -e "  ${CYAN}查看日志:${NC} openclaw logs --follow"
         echo -e "  ${CYAN}停止服务:${NC} openclaw gateway stop"
         echo ""
         log_info "OpenClaw 现在可以接收消息了！"
     else
         log_error "Gateway 启动失败"
         echo ""
-        echo -e "${YELLOW}请查看日志: tail -f /tmp/openclaw-gateway.log${NC}"
-        echo -e "${YELLOW}或手动启动: source ~/.openclaw/env && openclaw gateway${NC}"
+        echo -e "${YELLOW}请查看状态: openclaw gateway status --deep${NC}"
+        echo -e "${YELLOW}或前台运行: source ~/.openclaw/env && openclaw gateway run${NC}"
     fi
 }
 
@@ -3455,7 +3563,7 @@ run_tuzi_only_setup() {
     echo ""
     echo -e "${CYAN}后续可用命令:${NC}"
     echo "  openclaw models status"
-    echo "  source ~/.openclaw/env && openclaw gateway"
+    echo "  source ~/.openclaw/env && openclaw gateway run"
     if [ "$config_menu_ready" = true ]; then
         echo "  bash ~/.openclaw/config-menu.sh"
     else
@@ -3522,7 +3630,7 @@ main() {
     else
         echo ""
         echo -e "${CYAN}稍后可以通过以下命令启动服务:${NC}"
-        echo "  source ~/.openclaw/env && openclaw gateway"
+        echo "  source ~/.openclaw/env && openclaw gateway run"
         echo ""
     fi
     
@@ -3579,5 +3687,7 @@ main() {
     echo ""
 }
 
-# 执行主函数
-main "$@"
+# 预检脚本可 source 本文件测试纯函数，不触发交互安装。
+if [ "${OPENCLAW_INSTALLER_LIB_ONLY:-0}" != "1" ]; then
+    main "$@"
+fi

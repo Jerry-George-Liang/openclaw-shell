@@ -1,0 +1,42 @@
+// OpenClaw configuration example. Copy to ~/.openclaw/openclaw.json only when
+// you are deliberately configuring a local installation outside the installer.
+{
+  gateway: {
+    mode: "local",
+    bind: "loopback",
+    auth: {
+      mode: "token",
+    },
+  },
+  agents: {
+    defaults: {
+      model: {
+        primary: "tuzi-codex/gpt-5.4",
+        fallbacks: [],
+      },
+      models: {
+        "tuzi-codex/gpt-5.4": {},
+      },
+    },
+  },
+  models: {
+    providers: {
+      "tuzi-codex": {
+        baseUrl: "https://api.tu-zi.com/v1",
+        api: "openai-completions",
+        // Set credentials through the installer or ~/.openclaw/env; do not commit keys.
+        models: [
+          {
+            id: "gpt-5.4",
+            name: "gpt-5.4",
+            reasoning: false,
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 200000,
+            maxTokens: 100000,
+          },
+        ],
+      },
+    },
+  },
+}

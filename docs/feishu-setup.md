@@ -74,8 +74,8 @@ bash ~/.openclaw/config-menu.sh
 
 1. 选择 `[3] 消息渠道配置`
 2. 选择 `[7] 飞书 (Feishu)`
-3. 按提示输入 **App ID** 和 **App Secret**
-4. 配置完成后选择「是」重启 Gateway
+3. 脚本会安装官方 `@openclaw/feishu` 插件并启动 `openclaw channels login --channel feishu`
+4. 按官方向导完成授权，脚本会校验配置并可选重启 Gateway
 
 ### 第七步：配置事件订阅（长连接）
 
@@ -121,8 +121,8 @@ bash ~/.openclaw/config-menu.sh
 
 1. 选择 `[7] 快速测试`
 2. 选择 `[5] 测试飞书机器人`
-3. 系统会自动读取已配置的凭据
-4. 可选输入群组 Chat ID 发送测试消息
+3. 脚本运行 `openclaw channels status --probe` 检查官方插件的渠道连通性
+4. 凭证由 OpenClaw 官方向导管理，脚本不会读取或显示 App Secret
 
 ### 方法二：直接在群里测试
 
@@ -206,8 +206,8 @@ openclaw config set channels.feishu.domain "lark"
 - [飞书开放平台](https://open.feishu.cn/)
 - [飞书开放平台文档](https://open.feishu.cn/document/)
 - [OpenClaw 主仓库](https://github.com/openclaw/openclaw)
-- [安装工具仓库](https://github.com/cwj526/OpenClawInstaller)
+- [安装工具仓库](https://github.com/tuziapi/OpenClawInstaller)
 
 ---
 
-如有问题，请在 [GitHub Issues](https://github.com/cwj526/OpenClawInstaller/issues) 中反馈。
+如有问题，请在 [GitHub Issues](https://github.com/tuziapi/OpenClawInstaller/issues) 中反馈。

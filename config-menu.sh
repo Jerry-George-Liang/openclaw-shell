@@ -8,6 +8,11 @@
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 #
 
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == mingw* || "${OSTYPE:-}" == cygwin* ]]; then
+    echo "错误: Windows 请在 PowerShell 使用官方安装器，或在 WSL2 中运行此 Bash 配置菜单。" >&2
+    exit 1
+fi
+
 # ================================ TTY 检测 ================================
 # 当通过 curl | bash 或被其他脚本调用时，stdin 可能不是终端
 # 需要从 /dev/tty 读取用户输入
@@ -63,6 +68,36 @@ OPENCLAW_ENV="$CONFIG_DIR/env"
 OPENCLAW_JSON="$CONFIG_DIR/openclaw.json"
 BACKUP_DIR="$CONFIG_DIR/backups"
 TUZI_CACHE_DIR="$CONFIG_DIR/cache"
+
+begin_config_transaction() {
+    local config_file="$1"
+    local backup_file="${config_file}.openclaw-installer-backup.$$"
+    if [ -f "$config_file" ]; then cp -p "$config_file" "$backup_file"; else : > "$backup_file"; fi
+    printf '%s' "$backup_file"
+}
+
+rollback_config_transaction() {
+    local config_file="$1" backup_file="$2"
+    if [ -s "$backup_file" ]; then cp -p "$backup_file" "$config_file"; else rm -f "$config_file"; fi
+    rm -f "$backup_file"
+}
+
+commit_config_transaction() { rm -f "$1"; }
+
+ensure_json_config_parseable() {
+    local config_file="$1"
+    [ ! -f "$config_file" ] && return 0
+    if command -v node >/dev/null 2>&1; then
+        node -e 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))' "$config_file" >/dev/null 2>&1 && return 0
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$config_file" >/dev/null 2>&1 && return 0
+    else
+        log_error "无法解析 OpenClaw 配置：需要 node 或 python3"
+        return 1
+    fi
+    log_error "OpenClaw 配置不是严格 JSON，已停止写入以保护现有配置: $config_file"
+    return 1
+}
 
 # ================================ 工具函数 ================================
 
@@ -354,6 +389,28 @@ append_env_kv() {
     local escaped_value
     escaped_value=$(shell_quote_value "$value")
     printf 'export %s=%s\n' "$key" "$escaped_value" >> "$env_file"
+}
+
+set_env_kv() {
+    local env_file="$1"
+    local key="$2"
+    local value="$3"
+    local tmp_file="${env_file}.tmp.$$"
+    local escaped_value
+    escaped_value=$(shell_quote_value "$value")
+    mkdir -p "$(dirname "$env_file")"
+    if [ ! -f "$env_file" ]; then
+        write_env_header "$env_file" "配置菜单"
+    fi
+    : > "$tmp_file"
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            "export ${key}="*) ;;
+            *) printf '%s\n' "$line" >> "$tmp_file" ;;
+        esac
+    done < "$env_file"
+    printf 'export %s=%s\n' "$key" "$escaped_value" >> "$tmp_file"
+    mv "$tmp_file" "$env_file"
 }
 
 write_env_header() {
@@ -1418,40 +1475,52 @@ write_tuzi_env_file() {
     local gac_codex_model="${10}"
     local gac_codex_models="${11}"
 
-    write_env_header "$env_file" "配置菜单"
+    local tmp_file="${env_file}.tmp.$$"
+    : > "$tmp_file"
+    if [ -f "$env_file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+                "export TUZI_CLAUDE_CODE_"*|"export TUZI_CODEX_"*|"export GACCODE_API_KEY="*|"export GAC_CLAUDE_"*|"export GAC_CODEX_"*) ;;
+                *) printf '%s\n' "$line" >> "$tmp_file" ;;
+            esac
+        done < "$env_file"
+    else
+        printf '%s\n' "# OpenClaw 环境变量配置" "# 由配置菜单自动生成: $(date '+%Y-%m-%d %H:%M:%S')" >> "$tmp_file"
+    fi
     if [ -n "$claude_key" ]; then
-        append_env_kv "$env_file" "TUZI_CLAUDE_CODE_API_KEY" "$claude_key"
+        append_env_kv "$tmp_file" "TUZI_CLAUDE_CODE_API_KEY" "$claude_key"
     fi
     if [ -n "$claude_model" ]; then
-        append_env_kv "$env_file" "TUZI_CLAUDE_CODE_MODEL" "$claude_model"
+        append_env_kv "$tmp_file" "TUZI_CLAUDE_CODE_MODEL" "$claude_model"
     fi
     if [ -n "$claude_models" ]; then
-        append_env_kv "$env_file" "TUZI_CLAUDE_CODE_MODELS" "$claude_models"
+        append_env_kv "$tmp_file" "TUZI_CLAUDE_CODE_MODELS" "$claude_models"
     fi
     if [ -n "$codex_key" ]; then
-        append_env_kv "$env_file" "TUZI_CODEX_API_KEY" "$codex_key"
+        append_env_kv "$tmp_file" "TUZI_CODEX_API_KEY" "$codex_key"
     fi
     if [ -n "$codex_model" ]; then
-        append_env_kv "$env_file" "TUZI_CODEX_MODEL" "$codex_model"
+        append_env_kv "$tmp_file" "TUZI_CODEX_MODEL" "$codex_model"
     fi
     if [ -n "$codex_models" ]; then
-        append_env_kv "$env_file" "TUZI_CODEX_MODELS" "$codex_models"
+        append_env_kv "$tmp_file" "TUZI_CODEX_MODELS" "$codex_models"
     fi
     if [ -n "$gac_key" ]; then
-        append_env_kv "$env_file" "GACCODE_API_KEY" "$gac_key"
+        append_env_kv "$tmp_file" "GACCODE_API_KEY" "$gac_key"
     fi
     if [ -n "$gac_claude_model" ]; then
-        append_env_kv "$env_file" "GAC_CLAUDE_MODEL" "$gac_claude_model"
+        append_env_kv "$tmp_file" "GAC_CLAUDE_MODEL" "$gac_claude_model"
     fi
     if [ -n "$gac_claude_models" ]; then
-        append_env_kv "$env_file" "GAC_CLAUDE_MODELS" "$gac_claude_models"
+        append_env_kv "$tmp_file" "GAC_CLAUDE_MODELS" "$gac_claude_models"
     fi
     if [ -n "$gac_codex_model" ]; then
-        append_env_kv "$env_file" "GAC_CODEX_MODEL" "$gac_codex_model"
+        append_env_kv "$tmp_file" "GAC_CODEX_MODEL" "$gac_codex_model"
     fi
     if [ -n "$gac_codex_models" ]; then
-        append_env_kv "$env_file" "GAC_CODEX_MODELS" "$gac_codex_models"
+        append_env_kv "$tmp_file" "GAC_CODEX_MODELS" "$gac_codex_models"
     fi
+    mv "$tmp_file" "$env_file"
 }
 
 configure_gaccode_providers() {
@@ -1463,6 +1532,9 @@ configure_gaccode_providers() {
         log_error "GACCode 配置参数不完整"
         return 1
     fi
+    ensure_json_config_parseable "$config_file" || return 1
+    local config_backup
+    config_backup=$(begin_config_transaction "$config_file")
 
     local config_success=false
     local gac_claude_primary
@@ -1706,8 +1778,16 @@ with open(vars['config_file'], 'w') as f:
 
     if [ "$config_success" = false ]; then
         log_error "GACCode Provider 写入失败（需要 node 或 python3）"
+        rollback_config_transaction "$config_file" "$config_backup"
         return 1
     fi
+
+    if check_openclaw_installed && ! openclaw config validate >/dev/null 2>&1; then
+        log_error "OpenClaw 配置校验失败，已恢复修改前配置"
+        rollback_config_transaction "$config_file" "$config_backup"
+        return 1
+    fi
+    commit_config_transaction "$config_backup"
 
     return 0
 }
@@ -1735,11 +1815,15 @@ configure_tuzi_provider() {
         log_error "Tuzi 配置参数不完整"
         return 1
     fi
+    ensure_json_config_parseable "$config_file" || return 1
 
     if [ "$group" = "gaccode" ]; then
         configure_gaccode_providers "$api_key" "$config_file" "$update_default"
         return $?
     fi
+
+    local config_backup
+    config_backup=$(begin_config_transaction "$config_file")
 
     local config_success=false
 
@@ -1988,8 +2072,16 @@ with open(vars['config_file'], 'w') as f:
 
     if [ "$config_success" = false ]; then
         log_error "Tuzi Provider 写入失败（需要 node 或 python3）"
+        rollback_config_transaction "$config_file" "$config_backup"
         return 1
     fi
+
+    if check_openclaw_installed && ! openclaw config validate >/dev/null 2>&1; then
+        log_error "OpenClaw 配置校验失败，已恢复修改前配置"
+        rollback_config_transaction "$config_file" "$config_backup"
+        return 1
+    fi
+    commit_config_transaction "$config_backup"
 
     log_info "Tuzi Provider 已写入: $provider_id"
     return 0
@@ -2012,21 +2104,22 @@ restart_gateway_for_channel() {
         source "$OPENCLAW_ENV"
     fi
     
-    # 先运行 doctor --fix 确保配置有效
     echo -e "${YELLOW}检查配置...${NC}"
-    yes | openclaw doctor --fix > /dev/null 2>&1 || true
+    if ! openclaw config validate; then
+        log_error "配置校验失败，已取消 Gateway 重启"
+        return 1
+    fi
     
     # 使用官方 restart 命令
     local restart_output
-    restart_output=$(openclaw gateway restart 2>&1) || true
+    if ! restart_output=$(openclaw gateway restart 2>&1); then
+        log_error "Gateway 重启命令失败"
+    fi
     
     sleep 2
     
-    # 使用端口检测判断服务是否启动成功（更可靠）
-    local gateway_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-    
-    if [ -n "$gateway_pid" ]; then
-        log_info "Gateway 已重启！(PID: $gateway_pid)"
+    if openclaw health >/dev/null 2>&1; then
+        log_info "Gateway 已重启！"
         echo ""
         
         # 获取并显示 Dashboard URL（带 token）
@@ -2053,8 +2146,8 @@ restart_gateway_for_channel() {
         echo "$restart_output" | head -10 | sed 's/^/  /'
         echo ""
         echo -e "${CYAN}建议:${NC}"
-        echo "  • 运行 ${WHITE}openclaw doctor --fix${NC} 修复配置问题"
-        echo "  • 运行 ${WHITE}openclaw gateway start${NC} 手动启动"
+        echo "  • 运行 ${WHITE}openclaw gateway status --deep${NC} 查看服务状态"
+        echo "  • 运行 ${WHITE}openclaw gateway run${NC} 前台启动并查看错误"
     fi
 }
 
@@ -2415,117 +2508,6 @@ test_slack_bot() {
     fi
 }
 
-# 测试飞书机器人
-test_feishu_bot() {
-    local app_id=$1
-    local app_secret=$2
-    local chat_id=$3
-    
-    echo ""
-    echo -e "${CYAN}━━━ 测试飞书机器人 ━━━${NC}"
-    echo ""
-    
-    # 1. 获取 tenant_access_token
-    echo -e "${YELLOW}1. 获取 tenant_access_token...${NC}"
-    local token_result=$(curl -s -X POST "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal" \
-        -H "Content-Type: application/json" \
-        -d "{
-            \"app_id\": \"$app_id\",
-            \"app_secret\": \"$app_secret\"
-        }" 2>/dev/null)
-    
-    local code=$(echo "$token_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null)
-    
-    if [ "$code" != "0" ]; then
-        local msg=$(echo "$token_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('msg', '未知错误'))" 2>/dev/null)
-        log_error "获取 Token 失败: $msg"
-        echo ""
-        echo -e "${YELLOW}请检查:${NC}"
-        echo "  • App ID 和 App Secret 是否正确"
-        echo "  • 应用是否已发布"
-        return 1
-    fi
-    
-    local access_token=$(echo "$token_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tenant_access_token', ''))" 2>/dev/null)
-    log_info "Token 获取成功！"
-    
-    # 2. 获取机器人信息
-    echo ""
-    echo -e "${YELLOW}2. 获取机器人信息...${NC}"
-    local bot_info=$(curl -s "https://open.feishu.cn/open-apis/bot/v3/info" \
-        -H "Authorization: Bearer $access_token" 2>/dev/null)
-    
-    local bot_code=$(echo "$bot_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null)
-    if [ "$bot_code" = "0" ]; then
-        local bot_name=$(echo "$bot_info" | python3 -c "import sys,json; print(json.load(sys.stdin).get('bot', {}).get('app_name', 'Unknown'))" 2>/dev/null)
-        log_info "机器人: $bot_name"
-    else
-        log_warn "无法获取机器人信息（可能需要添加机器人能力）"
-    fi
-    
-    # 3. 发送测试消息（如果提供了 chat_id）
-    if [ -n "$chat_id" ]; then
-        echo ""
-        echo -e "${YELLOW}3. 发送测试消息...${NC}"
-        
-        local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-        
-        # 使用 Python 正确构建 JSON，确保 content 是字符串化的 JSON
-        local request_body=$(python3 -c "
-import json
-
-message = '''🦞 OpenClaw 测试消息
-
-这是一条来自配置工具的测试消息。
-如果你收到这条消息，说明飞书机器人配置成功！
-
-时间: $timestamp'''
-
-# content 必须是一个 JSON 字符串（字符串化的 JSON 对象）
-content_obj = {'text': message}
-content_str = json.dumps(content_obj, ensure_ascii=False)
-
-body = {
-    'receive_id': '$chat_id',
-    'msg_type': 'text',
-    'content': content_str
-}
-print(json.dumps(body, ensure_ascii=False))
-" 2>/dev/null)
-        
-        echo -e "${GRAY}请求体: $request_body${NC}"
-        
-        local send_result=$(curl -s -X POST "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id" \
-            -H "Authorization: Bearer $access_token" \
-            -H "Content-Type: application/json" \
-            -d "$request_body" 2>/dev/null)
-        
-        echo -e "${GRAY}响应: $send_result${NC}"
-        echo ""
-        
-        local send_code=$(echo "$send_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('code', -1))" 2>/dev/null)
-        if [ "$send_code" = "0" ]; then
-            log_info "测试消息发送成功！请检查飞书群组"
-        else
-            local send_msg=$(echo "$send_result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('msg', '未知错误'))" 2>/dev/null)
-            log_error "消息发送失败: $send_msg (code: $send_code)"
-            echo ""
-            echo -e "${YELLOW}提示:${NC}"
-            echo "  • 确保机器人已添加到群组"
-            echo "  • 确保有 im:message:send_as_bot 权限"
-            echo "  • 群组 ID 可在群设置中查看"
-        fi
-    else
-        echo ""
-        echo -e "${GREEN}✓ 飞书应用验证成功！${NC}"
-        echo ""
-        echo -e "${YELLOW}如需发送测试消息，请提供群组 Chat ID${NC}"
-        echo -e "${GRAY}获取方式: 群设置 → 群信息 → 群号${NC}"
-    fi
-    
-    return 0
-}
-
 # 测试 Ollama 连接
 test_ollama_connection() {
     local base_url=$1
@@ -2683,14 +2665,12 @@ show_status() {
     print_divider
     echo ""
     
-    # OpenClaw 服务状态
+    # OpenClaw Gateway 状态
     if command -v openclaw &> /dev/null; then
         echo -e "  ${GREEN}✓${NC} OpenClaw 已安装: $(openclaw --version 2>/dev/null || echo 'unknown')"
         
-        # 使用端口检测判断服务运行状态（更可靠）
-        local status_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-        if [ -n "$status_pid" ]; then
-            echo -e "  ${GREEN}●${NC} 服务状态: ${GREEN}运行中${NC} (PID: $status_pid)"
+        if openclaw gateway status --deep >/dev/null 2>&1; then
+            echo -e "  ${GREEN}●${NC} 服务状态: ${GREEN}运行中${NC}"
         else
             echo -e "  ${RED}●${NC} 服务状态: ${RED}已停止${NC}"
         fi
@@ -5036,7 +5016,7 @@ config_imessage() {
     press_enter
 }
 
-# 安装飞书插件（使用指定版本 0.1.2，因为新版本有问题）
+# 安装官方飞书插件
 install_feishu_plugin() {
     echo -e "${YELLOW}安装飞书插件...${NC}"
     echo ""
@@ -5049,13 +5029,12 @@ install_feishu_plugin() {
         return 0
     fi
     
-    echo -e "${CYAN}正在安装飞书插件 @m1heng-clawd/feishu ...${NC}"
+    echo -e "${CYAN}正在安装官方飞书插件 @openclaw/feishu ...${NC}"
     echo ""
     
-    # 使用 openclaw plugins install 安装指定版本
-    # 注意：新版本 0.1.4 有问题（缺少 openclaw.extensions），必须使用 0.1.2
+    # 使用 OpenClaw 官方插件管理命令安装当前兼容版本。
     local install_output
-    install_output=$(openclaw plugins install @m1heng-clawd/feishu 2>&1)
+    install_output=$(openclaw plugins install @openclaw/feishu 2>&1)
     local install_exit=$?
     
     # 过滤掉 banner，显示关键信息
@@ -5070,65 +5049,12 @@ install_feishu_plugin() {
         log_error "插件安装失败"
         echo ""
         echo -e "${CYAN}请手动安装:${NC}"
-        echo "  openclaw plugins install @m1heng-clawd/feishu"
+        echo "  openclaw plugins install @openclaw/feishu"
         echo ""
-        echo -e "${YELLOW}⚠️  注意: 必须使用 0.1.2 版本，新版本 0.1.4 有问题${NC}"
+        echo -e "${YELLOW}⚠️  请确认当前 OpenClaw 版本满足官方飞书插件要求${NC}"
         echo ""
         return 1
     fi
-}
-
-# 保存飞书配置（使用 openclaw 原生命令）
-save_feishu_config() {
-    local app_id="$1"
-    local app_secret="$2"
-    
-    echo -e "${YELLOW}添加飞书渠道...${NC}"
-    
-    # 使用 openclaw channels add 添加飞书渠道
-    local add_output
-    add_output=$(openclaw channels add --channel feishu 2>&1)
-    local add_exit=$?
-    
-    # 过滤掉 openclaw banner，只显示关键信息
-    echo "$add_output" | grep -v "^🦞" | grep -v "^$" | head -3
-    
-    if [ $add_exit -ne 0 ]; then
-        log_warn "飞书渠道可能已存在，继续配置..."
-    fi
-    
-    # 使用 openclaw config set 设置凭证
-    echo -e "${YELLOW}配置 App ID...${NC}"
-    local set_output
-    set_output=$(openclaw config set channels.feishu.appId "$app_id" 2>&1)
-    local set_exit=$?
-    
-    if [ $set_exit -ne 0 ]; then
-        echo "$set_output" | grep -v "^🦞" | grep -v "^$"
-        log_error "设置 App ID 失败"
-        return 1
-    fi
-    echo "$set_output" | grep -v "^🦞" | grep -v "^$" | head -1
-    
-    echo -e "${YELLOW}配置 App Secret...${NC}"
-    set_output=$(openclaw config set channels.feishu.appSecret "$app_secret" 2>&1)
-    set_exit=$?
-    
-    if [ $set_exit -ne 0 ]; then
-        echo "$set_output" | grep -v "^🦞" | grep -v "^$"
-        log_error "设置 App Secret 失败"
-        return 1
-    fi
-    echo "$set_output" | grep -v "^🦞" | grep -v "^$" | head -1
-    
-    # 设置其他默认配置
-    openclaw config set channels.feishu.enabled true > /dev/null 2>&1 || true
-    openclaw config set channels.feishu.connectionMode websocket > /dev/null 2>&1 || true
-    openclaw config set channels.feishu.domain feishu > /dev/null 2>&1 || true
-    openclaw config set channels.feishu.requireMention true > /dev/null 2>&1 || true
-    
-    log_info "飞书渠道配置完成"
-    return 0
 }
 
 config_feishu() {
@@ -5139,7 +5065,7 @@ config_feishu() {
     print_divider
     echo ""
     
-    echo -e "${YELLOW}⚠️ 注意: 飞书接入通过社区插件支持${NC}"
+    echo -e "${YELLOW}⚠️ 注意: 飞书接入通过 OpenClaw 官方插件支持${NC}"
     echo ""
     
     if ! check_openclaw_installed; then
@@ -5150,7 +5076,7 @@ config_feishu() {
     
     echo -e "${CYAN}飞书接入说明:${NC}"
     echo ""
-    echo -e "  ${WHITE}使用社区插件 @m1heng-clawd/feishu${NC}"
+    echo -e "  ${WHITE}使用官方插件 @openclaw/feishu${NC}"
     echo ""
     echo -e "  ${GREEN}✓ 支持 WebSocket 连接（无需公网服务器）${NC}"
     echo -e "  ${GREEN}✓ 支持私聊和群聊${NC}"
@@ -5171,171 +5097,33 @@ config_feishu() {
 config_feishu_app() {
     clear_screen
     print_header
-    
-    echo -e "${WHITE}🔷 飞书应用配置${NC}"
+    echo -e "${WHITE}🔷 官方飞书配置向导${NC}"
     print_divider
     echo ""
-    
-    echo -e "${GREEN}✓ 个人账号即可使用，无需企业认证！${NC}"
-    echo -e "${CYAN}  （"自建应用"只是飞书的命名，任何人都可以创建）${NC}"
+    echo "OpenClaw 官方飞书插件会负责安装和凭证配置，脚本不再读取 App Secret。"
+    echo "请准备好飞书开放平台应用，并按向导完成授权。"
     echo ""
-    
-    echo -e "${CYAN}配置步骤:${NC}"
-    echo ""
-    echo "  ${WHITE}第一步: 安装飞书插件${NC} (自动完成)"
-    echo "    • 安装社区插件 @m1heng-clawd/feishu"
-    echo ""
-    echo "  ${WHITE}第二步: 飞书开放平台创建应用${NC}"
-    echo "    1. 访问 https://open.feishu.cn/"
-    echo "    2. 创建企业自建应用 → 添加「机器人」能力"
-    echo "    3. 获取 App ID 和 App Secret"
-    echo ""
-    echo "  ${WHITE}第三步: 配置机器人权限${NC}"
-    echo "    • 权限管理 → 添加以下权限:"
-    echo "      - im:message (收发消息)"
-    echo "      - im:message:send_as_bot (发送消息)"
-    echo "      - im:chat:readonly (读取群信息)"
-    echo ""
-    echo "  ${WHITE}第四步: 输入配置信息${NC}"
-    echo "    • 在此输入 App ID 和 App Secret"
-    echo "    • ${GREEN}使用长连接模式，无需 Verification Token${NC}"
-    echo ""
-    echo "  ${WHITE}第五步: 配置事件订阅（飞书后台）${NC}"
-    echo "    • 事件与回调 → 选择「使用长连接接收事件」"
-    echo "    • ${GREEN}无需公网服务器，无需 Webhook 地址${NC}"
-    echo "    • 添加事件: im.message.receive_v1"
-    echo ""
-    echo "  ${WHITE}第六步: 发布应用并添加到群组${NC}"
-    echo "    • 版本管理与发布 → 创建版本 → 发布"
-    echo "    • 在飞书群组设置中添加机器人"
-    echo ""
-    print_divider
-    echo ""
-    
-    if ! confirm "是否开始配置？"; then
+    if ! confirm "是否启动官方飞书登录向导？" "y"; then
         press_enter
         return
     fi
-    
-    # ========== 第一步：安装飞书插件 ==========
-    echo ""
-    echo -e "${WHITE}━━━ 第一步: 安装飞书插件 (自动) ━━━${NC}"
-    echo ""
-    
-    install_feishu_plugin
-    
-    echo ""
-    log_info "✅ 第一步完成！插件已就绪"
-    echo ""
-    
-    # ========== 第二、三步提示 ==========
-    echo -e "${WHITE}━━━ 第二、三步: 请在飞书开放平台完成 ━━━${NC}"
-    echo ""
-    echo -e "${CYAN}请打开飞书开放平台完成以下操作:${NC}"
-    echo "  1. 访问 https://open.feishu.cn/"
-    echo "  2. 创建企业自建应用 → 添加「机器人」能力"
-    echo "  3. 获取 App ID 和 App Secret"
-    echo "  4. 权限管理 → 添加权限:"
-    echo "     - im:message (收发消息)"
-    echo "     - im:message:send_as_bot (发送消息)"
-    echo "     - im:chat:readonly (读取群信息)"
-    echo ""
-    echo -e "${GREEN}💡 提示: 使用长连接模式，无需配置公网 Webhook 地址${NC}"
-    echo ""
-    
-    if ! confirm "已完成飞书后台配置，继续输入信息？"; then
+
+    if ! install_feishu_plugin; then
         press_enter
         return
     fi
-    
-    # ========== 第五步：输入配置并启动服务 ==========
-    echo ""
-    echo -e "${WHITE}━━━ 第五步: 输入配置并启动服务 ━━━${NC}"
-    echo ""
-    echo -e "${CYAN}📝 使用长连接模式，只需要 App ID 和 App Secret${NC}"
-    echo -e "${GRAY}   (无需 Verification Token 和 Encrypt Key)${NC}"
-    echo ""
-    echo -en "${YELLOW}输入 App ID: ${NC}"
-    read feishu_app_id < "$TTY_INPUT"
-    echo -en "${YELLOW}输入 App Secret: ${NC}"
-    read feishu_app_secret < "$TTY_INPUT"
-    
-    if [ -z "$feishu_app_id" ] || [ -z "$feishu_app_secret" ]; then
-        log_error "App ID 和 App Secret 不能为空"
-        press_enter
-        return
-    fi
-    
-    echo ""
-    log_info "正在保存配置..."
-    
-    # 使用专用函数保存飞书配置到 JSON 文件
-    echo -e "${YELLOW}配置飞书渠道...${NC}"
-    
-    if save_feishu_config "$feishu_app_id" "$feishu_app_secret"; then
-        log_info "飞书渠道配置成功！"
-    else
-        log_warn "配置保存失败，请检查"
-    fi
-    
-    echo ""
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${WHITE}✅ 配置已保存！${NC}"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "App ID: ${WHITE}${feishu_app_id:0:15}...${NC}"
-    echo -e "连接模式: ${WHITE}WebSocket 长连接${NC}"
-    echo -e "${GREEN}✓ 无需公网服务器${NC}"
-    echo ""
-    echo -e "${YELLOW}⚠️  重要: 需要先启动 Gateway 服务！${NC}"
-    echo -e "${CYAN}   启动后才能在飞书后台配置长连接${NC}"
-    echo ""
-    
-    if confirm "是否现在启动/重启 Gateway？" "y"; then
-        restart_gateway_for_channel
-    fi
-    
-    echo ""
-    echo -e "${WHITE}━━━ 第六步: 配置事件订阅 (飞书后台) ━━━${NC}"
-    echo ""
-    echo -e "${YELLOW}⚠️ 请确保 OpenClaw Gateway 服务已启动${NC}"
-    echo ""
-    echo -e "${CYAN}📋 在飞书开放平台完成以下配置:${NC}"
-    echo ""
-    echo -e "  ${WHITE}1. 事件与回调 → 选择「使用长连接接收事件」${NC}"
-    echo -e "     ${GREEN}✓ 无需公网服务器，无需 Webhook 地址${NC}"
-    echo -e "     ${YELLOW}⚠️ 如果无法保存，请确认 Gateway 已启动${NC}"
-    echo ""
-    echo -e "  ${WHITE}2. 添加事件订阅:${NC}"
-    echo "     • im.message.receive_v1 (接收消息，必须)"
-    echo "     • im.message.message_read_v1 (已读回执，可选)"
-    echo "     • im.chat.member.bot.added_v1 (机器人入群，可选)"
-    echo ""
-    echo -e "${WHITE}━━━ 第七步: 添加机器人到群组 ━━━${NC}"
-    echo ""
-    echo -e "${CYAN}📋 在飞书客户端添加机器人:${NC}"
-    echo "  1. 打开目标群组 → 设置（右上角 ⚙️）"
-    echo "  2. 群机器人 → 添加机器人"
-    echo "  3. 搜索你的机器人名称并添加"
-    echo ""
-    
-    # 询问是否测试
-    echo ""
-    if confirm "是否发送测试消息验证配置？" "y"; then
-        echo ""
-        echo -e "${CYAN}如需发送测试消息，请输入群组 Chat ID:${NC}"
-        echo -e "${GRAY}获取方式: 群设置 → 群信息 → 群号${NC}"
-        echo ""
-        echo -en "${YELLOW}Chat ID (留空跳过测试): ${NC}"
-        read feishu_chat_id < "$TTY_INPUT"
-        
-        if [ -n "$feishu_chat_id" ]; then
-            test_feishu_bot "$feishu_app_id" "$feishu_app_secret" "$feishu_chat_id"
+    if openclaw channels login --channel feishu; then
+        if openclaw config validate >/dev/null 2>&1; then
+            log_info "飞书配置已通过 OpenClaw 校验"
         else
-            test_feishu_bot "$feishu_app_id" "$feishu_app_secret"
+            log_error "飞书配置校验失败，请检查向导输出"
         fi
+        if confirm "是否现在重启 Gateway？" "y"; then
+            restart_gateway_for_channel
+        fi
+    else
+        log_error "飞书登录向导执行失败"
     fi
-    
     press_enter
 }
 
@@ -5478,10 +5266,8 @@ manage_service() {
     print_divider
     echo ""
     
-    # 使用端口检测判断服务状态（更可靠）
-    local menu_status_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-    if [ -n "$menu_status_pid" ]; then
-        echo -e "  当前状态: ${GREEN}● 运行中${NC} (PID: $menu_status_pid)"
+    if check_openclaw_installed && openclaw gateway status --deep >/dev/null 2>&1; then
+        echo -e "  当前状态: ${GREEN}● 运行中${NC}"
     else
         echo -e "  当前状态: ${RED}● 已停止${NC}"
     fi
@@ -5506,12 +5292,8 @@ manage_service() {
         1)
             echo ""
             if command -v openclaw &> /dev/null; then
-                # 先检查服务是否已经在运行（使用端口检测，更可靠）
-                local port=18789
-                local running_pid=$(lsof -ti :$port 2>/dev/null | head -1)
-                
-                if [ -n "$running_pid" ]; then
-                    echo -e "${GREEN}✓ 服务已经在运行中！${NC} (PID: $running_pid)"
+                if openclaw gateway status --deep >/dev/null 2>&1; then
+                    echo -e "${GREEN}✓ 服务已经在运行中！${NC}"
                     echo ""
                     
                     # 获取并显示 Dashboard URL
@@ -5539,28 +5321,6 @@ manage_service() {
                     return
                 fi
                 
-                # 检测端口是否被其他进程占用
-                local port_pid=$(lsof -ti :$port 2>/dev/null | head -1)
-                
-                if [ -n "$port_pid" ]; then
-                    echo -e "${YELLOW}检测到端口 $port 被其他进程占用 (PID: $port_pid)${NC}"
-                    if confirm "是否停止占用端口的进程？" "y"; then
-                        openclaw gateway stop > /dev/null 2>&1 || true
-                        sleep 1
-                        port_pid=$(lsof -ti :$port 2>/dev/null | head -1)
-                        if [ -n "$port_pid" ]; then
-                            kill -9 $port_pid 2>/dev/null || true
-                            sleep 1
-                        fi
-                        log_info "已清理端口占用"
-                    else
-                        log_warn "端口被占用，无法启动新服务"
-                        press_enter
-                        manage_service
-                        return
-                    fi
-                fi
-                
                 # 确保基础配置正确
                 ensure_openclaw_init
                 
@@ -5570,58 +5330,18 @@ manage_service() {
                     log_info "已加载环境变量"
                 fi
                 
-                # 先运行 doctor --fix 确保配置有效（与重启保持一致）
-                log_info "检查并修复配置..."
-                yes | openclaw doctor --fix > /dev/null 2>&1 || true
-                
-                # 验证修复后的配置
-                local config_check=$(openclaw doctor 2>&1 | head -5)
-                if echo "$config_check" | grep -qi "Config invalid"; then
-                    log_error "配置无效，无法自动修复"
-                    echo ""
-                    echo -e "${YELLOW}错误详情:${NC}"
-                    echo "$config_check" | head -10
-                    echo ""
-                    echo -e "${CYAN}请手动运行: openclaw doctor --fix${NC}"
+                log_info "校验 OpenClaw 配置..."
+                if ! openclaw config validate; then
+                    log_error "配置无效，请先修复配置后再启动"
                     press_enter
                     manage_service
                     return
                 fi
                 
                 log_info "正在启动服务..."
-                
-                # 后台启动 Gateway（使用 setsid 完全脱离终端）
-                if command -v setsid &> /dev/null; then
-                    if [ -f "$OPENCLAW_ENV" ]; then
-                        setsid bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-                    else
-                        setsid openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-                    fi
-                else
-                    # 备用方案：nohup + disown
-                    if [ -f "$OPENCLAW_ENV" ]; then
-                        nohup bash -c "source $OPENCLAW_ENV && exec openclaw gateway --port 18789" > /tmp/openclaw-gateway.log 2>&1 &
-                    else
-                        nohup openclaw gateway --port 18789 > /tmp/openclaw-gateway.log 2>&1 &
-                    fi
-                    disown 2>/dev/null || true
-                fi
-                
-                # 等待服务启动，多次检测端口
-                local gateway_pid=""
-                local check_count=0
-                while [ $check_count -lt 5 ]; do
-                    sleep 1
-                    gateway_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-                    if [ -n "$gateway_pid" ]; then
-                        break
-                    fi
-                    check_count=$((check_count + 1))
-                done
-                
-                # 最终检测：只要端口有服务就是成功（无论是刚启动的还是之前已运行的）
-                if [ -n "$gateway_pid" ]; then
-                    log_info "服务运行中 (PID: $gateway_pid)"
+                openclaw gateway install >/dev/null 2>&1 || true
+                if openclaw gateway start && sleep 2 && openclaw health >/dev/null 2>&1; then
+                    log_info "服务运行中"
                     echo ""
                     
                     # 获取并显示 Dashboard URL（带 token）
@@ -5639,24 +5359,8 @@ manage_service() {
                         echo -e "  ${WHITE}openclaw dashboard${NC}"
                     fi
                     
-                    echo ""
-                    echo -e "${CYAN}日志文件: /tmp/openclaw-gateway.log${NC}"
-                    # 显示最近的日志
-                    if [ -s /tmp/openclaw-gateway.log ]; then
-                        echo ""
-                        echo -e "${GRAY}最近日志:${NC}"
-                        tail -5 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
-                    fi
                 else
-                    log_error "启动失败，端口 18789 无服务监听"
-                    echo ""
-                    
-                    # 显示日志文件内容
-                    if [ -s /tmp/openclaw-gateway.log ]; then
-                        echo -e "${YELLOW}错误日志:${NC}"
-                        tail -15 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
-                    fi
-                    
+                    log_error "Gateway 启动失败"
                     echo ""
                     echo -e "${CYAN}━━━ 诊断信息 ━━━${NC}"
                     echo ""
@@ -5668,7 +5372,7 @@ manage_service() {
                     echo ""
                     echo -e "${CYAN}建议:${NC}"
                     echo -e "  1. 运行 ${WHITE}openclaw doctor --fix${NC} 修复配置"
-                    echo -e "  2. 运行 ${WHITE}openclaw gateway${NC} 手动启动查看详细错误"
+                    echo -e "  2. 运行 ${WHITE}openclaw gateway run${NC} 手动启动查看详细错误"
                 fi
             else
                 log_error "OpenClaw 未安装"
@@ -5678,15 +5382,10 @@ manage_service() {
             echo ""
             log_info "正在停止服务..."
             if command -v openclaw &> /dev/null; then
-                openclaw gateway stop 2>/dev/null || true
-                sleep 1
-                # 使用端口检测判断服务是否已停止（更可靠）
-                local stop_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-                if [ -z "$stop_pid" ]; then
+                if openclaw gateway stop; then
                     log_info "服务已停止"
                 else
-                    log_warn "服务可能仍在运行 (PID: $stop_pid)"
-                    echo -e "  运行 ${WHITE}kill $stop_pid${NC} 强制停止"
+                    log_error "服务停止失败，请运行 openclaw gateway status --deep 检查"
                 fi
             else
                 log_error "OpenClaw 未安装"
@@ -5704,18 +5403,9 @@ manage_service() {
                     source "$OPENCLAW_ENV"
                 fi
                 
-                # 使用官方 restart 命令
                 local restart_output
-                restart_output=$(openclaw gateway restart 2>&1) || true
-                local restart_exit=$?
-                
-                sleep 2
-                
-                # 使用端口检测判断服务是否启动成功（更可靠）
-                local gateway_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-                
-                if [ -n "$gateway_pid" ]; then
-                    log_info "服务已重启 (PID: $gateway_pid)"
+                if restart_output=$(openclaw gateway restart 2>&1); then
+                    log_info "服务已重启"
                     echo ""
                     
                     # 获取并显示 Dashboard URL
@@ -5737,14 +5427,7 @@ manage_service() {
                     echo -e "${YELLOW}诊断信息:${NC}"
                     echo ""
                     
-                    # 1. 临时日志
-                    if [ -s /tmp/openclaw-gateway.log ]; then
-                        echo -e "${CYAN}启动日志:${NC}"
-                        tail -10 /tmp/openclaw-gateway.log 2>/dev/null | sed 's/^/  /'
-                        echo ""
-                    fi
-                    
-                    # 2. OpenClaw 系统日志
+                    # OpenClaw 系统日志
                     echo -e "${CYAN}系统日志 (最近 5 条):${NC}"
                     openclaw logs 2>/dev/null | tail -5 | sed 's/^/  /' || echo "  (无法获取)"
                     echo ""
@@ -5833,28 +5516,17 @@ manage_service() {
                 sleep 1
             fi
             
-            # 使用端口检测确保服务已停止
-            local uninstall_pid=$(lsof -ti :18789 2>/dev/null | head -1)
-            if [ -n "$uninstall_pid" ]; then
-                log_warn "强制停止服务 (PID: $uninstall_pid)..."
-                kill -9 $uninstall_pid 2>/dev/null || true
-                sleep 1
-            fi
             log_info "服务已停止"
             
-            # 2. 卸载系统服务（如果已安装）
-            if [ -f "$HOME/Library/LaunchAgents/com.openclaw.agent.plist" ]; then
-                log_info "移除 macOS 系统服务..."
-                launchctl unload "$HOME/Library/LaunchAgents/com.openclaw.agent.plist" 2>/dev/null || true
-                rm -f "$HOME/Library/LaunchAgents/com.openclaw.agent.plist" 2>/dev/null || true
-            fi
-            
-            if [ -f "/etc/systemd/system/openclaw.service" ]; then
-                log_info "移除 systemd 系统服务..."
-                sudo systemctl stop openclaw 2>/dev/null || true
-                sudo systemctl disable openclaw 2>/dev/null || true
-                sudo rm -f /etc/systemd/system/openclaw.service 2>/dev/null || true
-                sudo systemctl daemon-reload 2>/dev/null || true
+            # 2. 卸载 OpenClaw 官方托管服务
+            if command -v openclaw &> /dev/null; then
+                log_info "正在移除 OpenClaw Gateway 系统服务..."
+                if ! openclaw gateway uninstall; then
+                    log_error "Gateway 系统服务卸载失败，已停止后续卸载"
+                    press_enter
+                    manage_service
+                    return
+                fi
             fi
             
             # 3. 卸载 npm 包
@@ -5894,7 +5566,7 @@ manage_service() {
             echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
             echo ""
             echo -e "${CYAN}如需重新安装，请运行:${NC}"
-            echo "  curl -fsSL https://raw.githubusercontent.com/cwj526/OpenClawInstaller/main/install.sh | bash"
+            echo "  curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/install.sh | bash"
             echo ""
             echo -e "${CYAN}或下载桌面版:${NC}"
             echo "  https://github.com/cwj526/openclaw-manager"
@@ -5931,15 +5603,32 @@ ensure_openclaw_init() {
         openclaw config set gateway.mode local 2>/dev/null || true
     fi
     
-    # 检查 gateway.auth 配置，如果是 token 模式但没有 token，则自动生成
-    local auth_mode=$(openclaw config get gateway.auth 2>/dev/null)
+    # 检查 gateway.auth.mode 配置，如果是 token 模式但没有 token，则自动生成
+    local auth_mode=$(openclaw config get gateway.auth.mode 2>/dev/null)
+    if [ -z "$auth_mode" ] || [ "$auth_mode" = "undefined" ]; then
+        # 新配置默认采用 token；已有 password 配置交给用户显式选择模式。
+        if ! openclaw config get gateway.auth.password >/dev/null 2>&1; then
+            openclaw config set gateway.auth.mode token 2>/dev/null || true
+            auth_mode="token"
+        fi
+    fi
     if [ "$auth_mode" = "token" ]; then
         local auth_token=$(openclaw config get gateway.auth.token 2>/dev/null)
-        if [ -z "$auth_token" ] || [ "$auth_token" = "undefined" ]; then
-            # 自动生成一个随机 token
-            local new_token=$(openssl rand -hex 32 2>/dev/null || cat /dev/urandom | head -c 32 | xxd -p 2>/dev/null || date +%s%N | sha256sum | head -c 64)
-            openclaw config set gateway.auth.token "$new_token" 2>/dev/null || true
-            log_info "已自动生成 Gateway Auth Token"
+        if [ -z "$auth_token" ] || [ "$auth_token" = "undefined" ] || [[ "$auth_token" == Config\ path* ]]; then
+            local new_token
+            if command -v openssl >/dev/null 2>&1; then
+                new_token=$(openssl rand -hex 32 2>/dev/null)
+            elif [ -r /dev/urandom ] && command -v od >/dev/null 2>&1; then
+                new_token=$(od -An -N32 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')
+            elif command -v python3 >/dev/null 2>&1; then
+                new_token=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+            fi
+            if [ -n "$new_token" ]; then
+                openclaw config set gateway.auth.token "$new_token" 2>/dev/null || true
+                log_info "已自动生成 Gateway Auth Token"
+            else
+                log_warn "无法自动生成 Gateway Auth Token，请运行 openclaw doctor --generate-gateway-token"
+            fi
         fi
     fi
 }
@@ -5957,61 +5646,62 @@ save_openclaw_ai_config() {
     
     local env_file="$OPENCLAW_ENV"
     local config_file="$OPENCLAW_JSON"
+    local env_backup
+    env_backup=$(begin_config_transaction "$env_file")
     
-    # 创建或更新环境变量文件
-    cat > "$env_file" << EOF
-# OpenClaw 环境变量配置
-# 由配置菜单自动生成: $(date '+%Y-%m-%d %H:%M:%S')
-EOF
+    # 只更新当前提供商变量，保留其他提供商和用户自定义变量。
+    if [ ! -f "$env_file" ]; then
+        write_env_header "$env_file" "配置菜单"
+    fi
 
     # 根据 provider 设置对应的环境变量
     case "$provider" in
         anthropic)
-            echo "export ANTHROPIC_API_KEY=$api_key" >> "$env_file"
-            [ -n "$base_url" ] && echo "export ANTHROPIC_BASE_URL=$base_url" >> "$env_file"
+            set_env_kv "$env_file" ANTHROPIC_API_KEY "$api_key"
+            [ -n "$base_url" ] && set_env_kv "$env_file" ANTHROPIC_BASE_URL "$base_url"
             ;;
         openai)
-            echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
-            [ -n "$base_url" ] && echo "export OPENAI_BASE_URL=$base_url" >> "$env_file"
+            set_env_kv "$env_file" OPENAI_API_KEY "$api_key"
+            [ -n "$base_url" ] && set_env_kv "$env_file" OPENAI_BASE_URL "$base_url"
             ;;
         deepseek)
-            echo "export DEEPSEEK_API_KEY=$api_key" >> "$env_file"
-            echo "export DEEPSEEK_BASE_URL=${base_url:-https://api.deepseek.com}" >> "$env_file"
+            set_env_kv "$env_file" DEEPSEEK_API_KEY "$api_key"
+            set_env_kv "$env_file" DEEPSEEK_BASE_URL "${base_url:-https://api.deepseek.com}"
             ;;
         kimi)
-            echo "export MOONSHOT_API_KEY=$api_key" >> "$env_file"
-            echo "export MOONSHOT_BASE_URL=${base_url:-https://api.moonshot.cn/v1}" >> "$env_file"
+            set_env_kv "$env_file" MOONSHOT_API_KEY "$api_key"
+            set_env_kv "$env_file" MOONSHOT_BASE_URL "${base_url:-https://api.moonshot.cn/v1}"
             ;;
         google|google-gemini-cli|google-antigravity)
-            echo "export GOOGLE_API_KEY=$api_key" >> "$env_file"
-            [ -n "$base_url" ] && echo "export GOOGLE_BASE_URL=$base_url" >> "$env_file"
+            set_env_kv "$env_file" GOOGLE_API_KEY "$api_key"
+            [ -n "$base_url" ] && set_env_kv "$env_file" GOOGLE_BASE_URL "$base_url"
             ;;
         groq)
-            echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
-            echo "export OPENAI_BASE_URL=${base_url:-https://api.groq.com/openai/v1}" >> "$env_file"
+            set_env_kv "$env_file" OPENAI_API_KEY "$api_key"
+            set_env_kv "$env_file" OPENAI_BASE_URL "${base_url:-https://api.groq.com/openai/v1}"
             ;;
         mistral)
-            echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
-            echo "export OPENAI_BASE_URL=${base_url:-https://api.mistral.ai/v1}" >> "$env_file"
+            set_env_kv "$env_file" OPENAI_API_KEY "$api_key"
+            set_env_kv "$env_file" OPENAI_BASE_URL "${base_url:-https://api.mistral.ai/v1}"
             ;;
         openrouter)
-            echo "export OPENAI_API_KEY=$api_key" >> "$env_file"
-            echo "export OPENAI_BASE_URL=${base_url:-https://openrouter.ai/api/v1}" >> "$env_file"
+            set_env_kv "$env_file" OPENAI_API_KEY "$api_key"
+            set_env_kv "$env_file" OPENAI_BASE_URL "${base_url:-https://openrouter.ai/api/v1}"
             ;;
         ollama)
-            echo "export OLLAMA_HOST=${base_url:-http://localhost:11434}" >> "$env_file"
+            set_env_kv "$env_file" OLLAMA_HOST "${base_url:-http://localhost:11434}"
             ;;
         xai)
-            echo "export XAI_API_KEY=$api_key" >> "$env_file"
+            set_env_kv "$env_file" XAI_API_KEY "$api_key"
             ;;
         zai)
-            echo "export ZAI_API_KEY=$api_key" >> "$env_file"
+            set_env_kv "$env_file" ZAI_API_KEY "$api_key"
             ;;
         minimax|minimax-cn)
-            echo "export MINIMAX_API_KEY=$api_key" >> "$env_file"
+            set_env_kv "$env_file" MINIMAX_API_KEY "$api_key"
             ;;
         opencode)
-            echo "export OPENCODE_API_KEY=$api_key" >> "$env_file"
+            set_env_kv "$env_file" OPENCODE_API_KEY "$api_key"
             ;;
     esac
     
@@ -6103,6 +5793,7 @@ EOF
         fi
     fi
     
+    commit_config_transaction "$env_backup"
     log_info "环境变量已保存到: $env_file"
 }
 
@@ -6116,6 +5807,10 @@ save_tuzi_ai_config() {
 
     local env_file="$OPENCLAW_ENV"
     local config_file="$OPENCLAW_JSON"
+    local env_backup
+    local config_backup
+    env_backup=$(begin_config_transaction "$env_file")
+    config_backup=$(begin_config_transaction "$config_file")
     local existing_primary_model=$(get_openclaw_primary_model)
     local existing_tuzi_group=$(get_tuzi_group_from_model_ref "$existing_primary_model")
     local should_update_default="false"
@@ -6172,17 +5867,27 @@ save_tuzi_ai_config() {
     chmod 600 "$env_file"
 
     if ! configure_tuzi_provider "$group" "$api_key" "$primary_model" "$selected_models" "$config_file" "$should_update_default"; then
+        rollback_config_transaction "$env_file" "$env_backup"
+        rollback_config_transaction "$config_file" "$config_backup"
         return 1
     fi
 
     if check_openclaw_installed && [ "$should_update_default" = "true" ]; then
         source "$env_file"
         if [ "$group" = "gaccode" ]; then
-            openclaw models set "gac-claude/$(get_gac_claude_primary_model)" 2>/dev/null || \
-                openclaw config set models.default "gac-claude/$(get_gac_claude_primary_model)" 2>/dev/null || true
+            if ! openclaw models set "gac-claude/$(get_gac_claude_primary_model)"; then
+                log_error "默认模型设置失败"
+                rollback_config_transaction "$env_file" "$env_backup"
+                rollback_config_transaction "$config_file" "$config_backup"
+                return 1
+            fi
         else
-            openclaw models set "$provider_id/$primary_model" 2>/dev/null || \
-                openclaw config set models.default "$provider_id/$primary_model" 2>/dev/null || true
+            if ! openclaw models set "$provider_id/$primary_model"; then
+                log_error "默认模型设置失败"
+                rollback_config_transaction "$env_file" "$env_backup"
+                rollback_config_transaction "$config_file" "$config_backup"
+                return 1
+            fi
         fi
     elif check_openclaw_installed; then
         if [ "$group" = "gaccode" ]; then
@@ -6207,6 +5912,8 @@ save_tuzi_ai_config() {
         fi
     fi
 
+    commit_config_transaction "$env_backup"
+    commit_config_transaction "$config_backup"
     log_info "环境变量已保存到: $env_file"
 }
 
@@ -6540,15 +6247,36 @@ advanced_settings() {
                 if command -v openclaw &> /dev/null; then
                     openclaw logs clear 2>/dev/null || log_warn "OpenClaw 日志清理命令不可用"
                 fi
-                rm -f /tmp/openclaw-gateway.log 2>/dev/null
                 log_info "日志已清理"
             fi
             ;;
         6)
             echo ""
-            log_info "正在更新 OpenClaw..."
-            npm update -g openclaw
-            log_info "更新完成"
+            if ! check_openclaw_installed; then
+                log_error "OpenClaw 未安装"
+                break
+            fi
+            log_info "当前版本: $(openclaw --version 2>/dev/null || echo unknown)"
+            local update_preview
+            if update_preview=$(openclaw update --dry-run 2>&1); then
+                printf '%s\n' "$update_preview"
+            else
+                printf '%s\n' "$update_preview"
+                log_error "更新预检失败"
+                if printf '%s' "$update_preview" | grep -qi "package manager owner is unknown"; then
+                    log_warn "当前 OpenClaw 安装来源无法识别，官方更新已拒绝执行。"
+                    echo "请重新运行官方安装器建立 npm/pnpm/Bun 的安装关联后再更新："
+                    echo "  curl -fsSL https://openclaw.ai/install.sh | bash -s -- --install-method npm --no-prompt --no-onboard --verify"
+                fi
+                break
+            fi
+            if confirm "确认执行 OpenClaw 更新？" "y"; then
+                if openclaw update && openclaw config validate && openclaw gateway status --deep; then
+                    log_info "更新完成并通过配置/网关检查"
+                else
+                    log_error "更新后检查失败，请查看 openclaw gateway status --deep"
+                fi
+            fi
             ;;
         7)
             if confirm "确定要卸载 OpenClaw 吗？" "n"; then
@@ -6960,72 +6688,14 @@ quick_test_feishu() {
     print_divider
     echo ""
     
-    local app_id=""
-    local app_secret=""
-    
-    # 尝试从 JSON 配置文件中读取
-    if [ -f "$OPENCLAW_JSON" ]; then
-        if command -v node &> /dev/null; then
-            app_id=$(node -e "
-try {
-    const config = JSON.parse(require('fs').readFileSync('$OPENCLAW_JSON', 'utf8'));
-    console.log(config.channels?.feishu?.appId || '');
-} catch (e) { console.log(''); }
-" 2>/dev/null)
-            app_secret=$(node -e "
-try {
-    const config = JSON.parse(require('fs').readFileSync('$OPENCLAW_JSON', 'utf8'));
-    console.log(config.channels?.feishu?.appSecret || '');
-} catch (e) { console.log(''); }
-" 2>/dev/null)
-        elif command -v python3 &> /dev/null; then
-            app_id=$(python3 -c "
-import json
-try:
-    with open('$OPENCLAW_JSON', 'r') as f:
-        config = json.load(f)
-    print(config.get('channels', {}).get('feishu', {}).get('appId', ''))
-except: print('')
-" 2>/dev/null)
-            app_secret=$(python3 -c "
-import json
-try:
-    with open('$OPENCLAW_JSON', 'r') as f:
-        config = json.load(f)
-    print(config.get('channels', {}).get('feishu', {}).get('appSecret', ''))
-except: print('')
-" 2>/dev/null)
-        fi
-    fi
-    
-    if [ -n "$app_id" ] && [ -n "$app_secret" ]; then
-        echo -e "${GREEN}✓ 检测到已配置的飞书应用${NC}"
-        echo -e "  App ID: ${WHITE}${app_id:0:15}...${NC}"
-        echo ""
+    if ! check_openclaw_installed; then
+        log_error "OpenClaw 未安装"
+    elif openclaw channels status --probe 2>&1 | grep -i feishu; then
+        log_info "飞书渠道探测完成"
     else
-        echo -e "${YELLOW}未检测到飞书配置，请手动输入:${NC}"
-        echo ""
-        echo -en "${YELLOW}App ID: ${NC}"
-        read app_id < "$TTY_INPUT"
-        echo -en "${YELLOW}App Secret: ${NC}"
-        read app_secret < "$TTY_INPUT"
-        
-        if [ -z "$app_id" ] || [ -z "$app_secret" ]; then
-            log_error "App ID 和 App Secret 不能为空"
-            press_enter
-            quick_test_menu
-            return
-        fi
+        log_warn "未检测到可用的飞书渠道，请先运行飞书配置向导"
+        echo "  openclaw channels login --channel feishu"
     fi
-    
-    echo ""
-    echo -e "${CYAN}如需发送测试消息，请输入群组 Chat ID（留空跳过）:${NC}"
-    echo -e "${GRAY}获取方式: 群设置 → 群信息 → 群号${NC}"
-    echo ""
-    echo -en "${YELLOW}Chat ID (可选): ${NC}"
-    read chat_id < "$TTY_INPUT"
-    
-    test_feishu_bot "$app_id" "$app_secret" "$chat_id"
     
     press_enter
     quick_test_menu
@@ -7339,5 +7009,7 @@ main() {
     done
 }
 
-# 执行主函数
-main "$@"
+# 允许预检脚本 source 纯函数，不触发交互菜单。
+if [ "${OPENCLAW_CONFIG_MENU_LIB_ONLY:-0}" != "1" ]; then
+    main "$@"
+fi
