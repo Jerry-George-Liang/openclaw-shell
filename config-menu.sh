@@ -5566,7 +5566,7 @@ manage_service() {
             echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
             echo ""
             echo -e "${CYAN}如需重新安装，请运行:${NC}"
-            echo "  curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/install.sh | bash"
+            echo "  curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install.sh | bash"
             echo ""
             echo -e "${CYAN}或下载桌面版:${NC}"
             echo "  https://github.com/cwj526/openclaw-manager"

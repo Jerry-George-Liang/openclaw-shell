@@ -23,6 +23,7 @@ for forbidden in \
     'models.default' \
     '@m1heng-clawd/feishu' \
     'cwj526/OpenClawInstaller' \
+    'tuziapi/OpenClawInstaller' \
     'clawd.bot' \
     'npm update -g openclaw' \
     'start --daemon' \
@@ -33,6 +34,7 @@ for forbidden in \
 done
 
 require_text 'openclaw gateway install' install.sh config-menu.sh
+require_text 'GITHUB_REPO="Jerry-George-Liang/openclaw-shell"' install.sh
 require_text 'openclaw update --dry-run' config-menu.sh
 require_text 'package manager owner is unknown' config-menu.sh
 require_text '重新运行官方安装器建立 npm/pnpm/Bun 的安装关联' config-menu.sh

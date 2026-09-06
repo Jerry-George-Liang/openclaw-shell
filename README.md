@@ -40,7 +40,7 @@
 ### 方式一：一键安装（命令行版）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install.sh | bash
 ```
 
 脚本会自动检测当前环境：
@@ -63,8 +63,8 @@ curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/inst
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/tuziapi/OpenClawInstaller.git
-cd OpenClawInstaller
+git clone https://github.com/Jerry-George-Liang/openclaw-shell.git
+cd openclaw-shell
 
 # 2. 添加执行权限
 chmod +x install.sh config-menu.sh
@@ -82,7 +82,7 @@ export PATH="$HOME/.local/bin:$PATH"
 如果你已经装好了 OpenClaw，只想把 Tuzi API 配进去，仍然使用同一条命令即可：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install.sh | bash
 ```
 
 脚本检测到已有安装后，会自动跳过：
@@ -129,7 +129,7 @@ openclaw gateway start
 bash ~/.openclaw/config-menu.sh
 
 # 如果本地没有配置菜单，可下载到固定位置后运行
-curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/config-menu.sh -o ~/.openclaw/config-menu.sh && bash ~/.openclaw/config-menu.sh
+curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/config-menu.sh -o ~/.openclaw/config-menu.sh && bash ~/.openclaw/config-menu.sh
 ```
 
 #### 可选：安装 `tuzi-skills`
@@ -562,9 +562,9 @@ rm -rf ~/.openclaw
 - [OpenClaw 官网](https://openclaw.ai)
 - [官方文档](https://docs.openclaw.ai)
 - [🖥️ OpenClaw Manager 桌面版](https://github.com/cwj526/openclaw-manager) - 图形界面管理工具
-- [安装工具仓库](https://github.com/tuziapi/OpenClawInstaller) - 命令行版本
+- [安装工具仓库](https://github.com/Jerry-George-Liang/openclaw-shell) - 命令行版本
 - [OpenClaw 主仓库](https://github.com/openclaw/openclaw)
-- [社区讨论](https://github.com/tuziapi/OpenClawInstaller/discussions)
+- [社区讨论](https://github.com/Jerry-George-Liang/openclaw-shell/discussions)
 
 ---
 

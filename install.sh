@@ -5,13 +5,13 @@
 # ║   🦞 OpenClaw 一键部署脚本 v1.0.0                                          ║
 # ║   智能 AI 助手部署工具 - 支持多平台多模型                                    ║
 # ║                                                                           ║
-# ║   GitHub: https://github.com/tuziapi/OpenClawInstaller                    ║
+# ║   GitHub: https://github.com/Jerry-George-Liang/openclaw-shell            ║
 # ║   官方文档: https://docs.openclaw.ai                                      ║
 # ║                                                                           ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 #
 # 使用方法:
-#   curl -fsSL https://raw.githubusercontent.com/tuziapi/OpenClawInstaller/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install.sh | bash
 #   或本地执行: chmod +x install.sh && ./install.sh
 #
 
@@ -49,7 +49,7 @@ TUZI_CACHE_DIR="$CONFIG_DIR/cache"
 MIN_NODE_22="22.22.3"
 MIN_NODE_24="24.15.0"
 MIN_NODE_25="25.9.0"
-GITHUB_REPO="tuziapi/OpenClawInstaller"
+GITHUB_REPO="Jerry-George-Liang/openclaw-shell"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main"
 INSTALL_MODE=""
 FORCE_REINSTALL="false"
