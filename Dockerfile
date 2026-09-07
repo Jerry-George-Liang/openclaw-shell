@@ -26,7 +26,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 WORKDIR /app
 
 # 安装 OpenClaw
-ARG OPENCLAW_VERSION=2026.9.1
+ARG OPENCLAW_VERSION=2026.9.2
 RUN set -eux; \
     if node -e 'const [major, minor] = process.argv[1].split(".").map(Number); process.exit(major > 11 || (major === 11 && minor >= 16) ? 0 : 1)' "$(npm --version)"; then \
       npm install -g "openclaw@${OPENCLAW_VERSION}" --allow-scripts=openclaw; \

@@ -12,9 +12,9 @@ services:
     build:
       context: .
       args:
-        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-2026.9.1}
+        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-2026.9.2}
         NODE_VERSION: ${NODE_VERSION:-24-bookworm-slim}
-    image: openclaw:${OPENCLAW_VERSION:-2026.9.1}
+    image: openclaw:${OPENCLAW_VERSION:-2026.9.2}
     container_name: openclaw
     restart: unless-stopped
     

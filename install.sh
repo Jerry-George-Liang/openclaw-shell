@@ -267,6 +267,24 @@ extract_openclaw_test_error() {
     echo "$output" | grep -iE "HTTP 401|HTTP 403|authentication_error|authentication failed|Invalid bearer token|Incorrect API|Unknown model|API key|超时" | head -5
 }
 
+get_openclaw_agent_test_mode() {
+    if run_with_timeout 5 openclaw health >/dev/null 2>&1; then
+        printf '%s' "gateway"
+    else
+        printf '%s' "local"
+    fi
+}
+
+run_openclaw_agent_test() {
+    if [ "$(get_openclaw_agent_test_mode)" = "gateway" ]; then
+        echo -e "${GRAY}Gateway 正在运行，使用服务模式测试。${NC}" >&2
+        run_with_timeout 30 openclaw agent --to "+1234567890" --message "回复 OK"
+    else
+        echo -e "${GRAY}Gateway 未运行，使用本地模式测试。${NC}" >&2
+        run_with_timeout 30 openclaw agent --local --to "+1234567890" --message "回复 OK"
+    fi
+}
+
 get_expected_tuzi_provider_prefix() {
     local tuzi_group="$1"
     case "$tuzi_group" in
@@ -320,6 +338,7 @@ run_openclaw_precheck() {
     local blockers=""
     local warnings=""
     local status_summary=""
+    local quota_issue="false"
 
     expected_prefix=$(get_expected_tuzi_provider_prefix "$expected_tuzi_group")
 
@@ -344,8 +363,13 @@ run_openclaw_precheck() {
         blockers="${blockers}${blockers:+$'\n'}无法读取 openclaw models status，请检查 OpenClaw 安装或配置。"
     fi
 
-    if echo "$combined_output" | grep -qiE "Token refresh failed|401|403|authentication_error|authentication failed|Invalid bearer token"; then
+    if echo "$combined_output" | grep -qiE "Token refresh failed|401|authentication_error|authentication failed|Invalid bearer token"; then
         blockers="${blockers}${blockers:+$'\n'}检测到鉴权失败或 token 已失效，请重新配置对应 Provider 的凭据。"
+    elif echo "$combined_output" | grep -qiE "insufficient funds|insufficient balance|余额|额度|预扣"; then
+        blockers="${blockers}${blockers:+$'\n'}Provider 返回 403，迹象更符合余额或额度不足，而不是 token 失效；请检查账户余额、预扣额度和 Provider 限额。"
+        quota_issue="true"
+    elif echo "$combined_output" | grep -qiE "HTTP[[:space:]]+403|403 Forbidden"; then
+        blockers="${blockers}${blockers:+$'\n'}Provider 返回 403，请检查账户权限、模型访问策略和额度；仅凭 403 不能判定 token 已失效。"
     fi
 
     if echo "$combined_output" | grep -qi "Unknown model"; then
@@ -365,7 +389,7 @@ run_openclaw_precheck() {
     fi
 
     if echo "$doctor_output" | grep -q "gateway.mode is unset"; then
-        warnings="${warnings}${warnings:+$'\n'}doctor 提示 gateway.mode 未设置，但这不阻止本次 local agent 实测。"
+        warnings="${warnings}${warnings:+$'\n'}doctor 提示 gateway.mode 未设置，但这不阻止本次 agent 实测。"
     fi
 
     if [ $doctor_exit -eq 124 ]; then
@@ -376,6 +400,7 @@ run_openclaw_precheck() {
     OPENCLAW_PRECHECK_STATUS_SUMMARY="$status_summary"
     OPENCLAW_PRECHECK_BLOCKERS="$blockers"
     OPENCLAW_PRECHECK_WARNINGS="$warnings"
+    OPENCLAW_PRECHECK_QUOTA_ISSUE="$quota_issue"
     OPENCLAW_PRECHECK_STATUS_OUTPUT="$status_output"
     OPENCLAW_PRECHECK_DOCTOR_OUTPUT="$doctor_output"
 }
@@ -3090,10 +3115,15 @@ test_api_connection() {
 
         if [ -n "$OPENCLAW_PRECHECK_BLOCKERS" ]; then
             echo -e "${YELLOW}提示:${NC}"
-            echo "  建议先修复鉴权或默认模型问题，再执行 agent 实测。"
+            echo "  建议先修复上述问题，再执行 agent 实测。"
             echo ""
 
-            if confirm "是否重新配置 AI Provider？" "y"; then
+            if [ "$OPENCLAW_PRECHECK_QUOTA_ISSUE" = "true" ]; then
+                if ! confirm "额度问题尚未解决，是否仍继续执行 openclaw agent 实测？" "n"; then
+                    echo -e "${YELLOW}已按你的选择跳过 agent 实测。${NC}"
+                    return 0
+                fi
+            elif confirm "是否重新配置 AI Provider？" "y"; then
                 setup_ai_provider
                 configure_openclaw_model
                 retry_count=$((retry_count + 1))
@@ -3107,7 +3137,7 @@ test_api_connection() {
                     echo -e "${RED}已达到最大重试次数，请先修复配置后再重新测试。${NC}"
                     break
                 fi
-            elif ! confirm "预检发现阻断问题，是否仍继续执行 openclaw agent --local 实测？" "n"; then
+            elif ! confirm "预检发现阻断问题，是否仍继续执行 openclaw agent 实测？" "n"; then
                 echo -e "${YELLOW}已按你的选择跳过 agent 实测。${NC}"
                 return 0
             fi
@@ -3116,22 +3146,22 @@ test_api_connection() {
             if [ -n "$OPENCLAW_PRECHECK_WARNINGS" ]; then
                 continue_default="n"
             fi
-            if ! confirm "是否继续执行 openclaw agent --local 实测？" "$continue_default"; then
+            if ! confirm "是否继续执行 openclaw agent 实测？" "$continue_default"; then
                 echo -e "${YELLOW}已按你的选择跳过 agent 实测。${NC}"
                 return 0
             fi
         fi
 
-        echo -e "${YELLOW}运行 openclaw agent --local 测试...${NC}"
+        echo -e "${YELLOW}运行 openclaw agent 测试...${NC}"
         echo ""
         
-        # 使用 openclaw agent --local 测试（添加超时）
+        # 添加超时；根据 Gateway 状态选择服务模式或本地模式。
         local result
         local exit_code
         
-        # 真实调用一次本地 agent，验证模型配置是否能完成单轮响应
+        # 真实调用一次 agent，验证模型配置是否能完成单轮响应。
         set +e
-        result=$(run_with_timeout 30 openclaw agent --local --to "+1234567890" --message "回复 OK" 2>&1)
+        result=$(run_openclaw_agent_test 2>&1)
         exit_code=$?
         set -e
 

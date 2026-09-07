@@ -1,6 +1,6 @@
-# OpenClaw 2026.9 Compatibility QA
+# OpenClaw 2026.9.2 Compatibility QA
 
-Date: 2026-09-04
+Date: 2026-09-07
 
 ## Scope
 
@@ -18,7 +18,7 @@ Date: 2026-09-04
 | `scripts/preflight-check.sh` | Legacy commands/config paths are absent; supported Node versions are accepted | Passed |
 | `OPENCLAW_GATEWAY_TOKEN=test docker compose config` | Compose variables and localhost port binding render correctly | Passed; binds `127.0.0.1:18789` |
 | Entrypoint with no Gateway credential | Container exits before starting an unauthenticated LAN Gateway | Passed; exits 1 before filesystem/runtime setup |
-| Isolated `openclaw@2026.9.1` `config validate` against `examples/openclaw.example.json5` | Current CLI accepts the generated JSON5 shape | Passed; `Config valid` |
+| Isolated `openclaw@2026.9.2` `config validate` against `examples/openclaw.example.json5` | Current CLI accepts the generated JSON5 shape | Passed; `Config valid` |
 | Isolated Tuzi Codex provider write | `models.providers`, `agents.defaults.model`, and `auth.profiles` are written with current keys | Passed; two models and `tuzi-codex/gpt-5.4` validated |
 | Isolated GAC provider write | Claude/Codex providers and auth profiles are written with current keys | Passed; both providers and `gac-claude/claude-opus-4-6` validated |
 | Isolated configuration-menu save | Existing environment variables survive a Tuzi save and resulting config validates | Passed |
