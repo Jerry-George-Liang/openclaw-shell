@@ -32,6 +32,7 @@ Date: 2026-09-07
 | Windows native installer | Uses PowerShell, official installer, and onboarding without Bash prompts | Passed by static review |
 | Windows cmd launcher | Delegates from `cmd.exe` to PowerShell and avoids Bash parsing | Passed by static review |
 | New Node.js installation line | Installs Node.js 22 LTS on Homebrew/NodeSource while retaining supported newer existing versions | Passed by static review |
+| Linux stale Node path recovery | Selects a supported `/usr/bin/node` after package installation when nvm/asdf still resolves an older runtime | Passed by static review |
 
 ## Not Executed
 

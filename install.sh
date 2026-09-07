@@ -1054,6 +1054,33 @@ install_homebrew() {
     fi
 }
 
+activate_system_node_runtime() {
+    local candidate candidate_version candidate_dir current_node
+    current_node=$(command -v node 2>/dev/null || true)
+
+    # NodeSource and distribution packages install here. A stale nvm/asdf
+    # entry can remain earlier in PATH even after apt/dnf successfully installs
+    # Node 22, so validate the actual binary before selecting it.
+    for candidate in /usr/bin/node /usr/local/bin/node; do
+        [ -x "$candidate" ] || continue
+        candidate_version=$("$candidate" --version 2>/dev/null | sed 's/^v//' || true)
+        is_supported_node_version "$candidate_version" || continue
+        candidate_dir=$(dirname "$candidate")
+        [ -x "$candidate_dir/npm" ] || continue
+
+        export PATH="$candidate_dir:$PATH"
+        hash -r 2>/dev/null || true
+        if check_command npm && is_supported_node_version "$(node --version 2>/dev/null | sed 's/^v//')"; then
+            if [ "$current_node" != "$candidate" ]; then
+                log_warn "检测到旧 Node.js 路径 ${current_node:-未知}，已切换到 $candidate"
+                ensure_path_export "export PATH=\"$candidate_dir:\$PATH\""
+            fi
+            return 0
+        fi
+    done
+    return 1
+}
+
 install_nodejs() {
     log_step "检查 Node.js..."
 
@@ -1115,8 +1142,13 @@ install_nodejs() {
             ;;
     esac
 
+    hash -r 2>/dev/null || true
+    if { ! check_command node || ! check_command npm || ! is_supported_node_version "$(node -v 2>/dev/null | sed 's/^v//')"; } && [ "$OS" != "macos" ]; then
+        activate_system_node_runtime || true
+    fi
+
     if ! check_command node || ! check_command npm || ! is_supported_node_version "$(node -v | sed 's/^v//')"; then
-        log_error "Node.js 安装后版本仍不兼容: $(node -v 2>/dev/null || echo '未安装')"
+        log_error "Node.js 安装后版本仍不兼容: $(node -v 2>/dev/null || echo '未安装') (路径: $(command -v node 2>/dev/null || echo '未找到'))"
         exit 1
     fi
     

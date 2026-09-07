@@ -520,6 +520,8 @@ sudo apt-get install -y nodejs
 
 Windows 请使用 PowerShell 官方安装器或 WSL2，不要在 Git Bash/Cygwin 中尝试执行本脚本。
 
+如果 Linux 日志显示 Node.js 22 已由 `apt`/`dnf` 安装，但随后仍检测到 Node.js 18，说明旧的 nvm/asdf 路径覆盖了 `/usr/bin/node`。安装器会自动验证并切换到系统安装的受支持 Node.js，同时把正确路径写入当前用户的 shell 配置。
+
 ### Q: 其他依赖是否需要手动固定版本？
 
 新安装只固定 Node.js 22 LTS；`curl`、`wget`、`jq`、`git`、`openssl` 和 Docker 基础工具使用系统稳定仓库或 Docker 官方 multi-arch 镜像。它们在不同发行版的可用版本不同，强行固定具体小版本反而容易导致旧系统无法解析或下载。Docker 默认使用 `node:22-bookworm-slim`，也可通过 `NODE_VERSION` 明确覆盖。
