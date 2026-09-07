@@ -19,6 +19,11 @@ for script_file in install.sh config-menu.sh docker-entrypoint.sh scripts/prefli
     bash -n "$script_file" || fail "shell syntax check failed: $script_file"
 done
 
+test -f install-windows.ps1 || fail "missing native Windows installer"
+rg -Fq -- "openclaw.ai/install.ps1" install-windows.ps1 || fail "Windows installer does not use official installer"
+rg -Fq -- "openclaw onboard" install-windows.ps1 || fail "Windows onboarding path is missing"
+rg -Fq -- "Do not run install.sh from cmd.exe or Git Bash" install-windows.ps1 || fail "Windows terminal guidance is missing"
+
 for forbidden in \
     'models.default' \
     '@m1heng-clawd/feishu' \

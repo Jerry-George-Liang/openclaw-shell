@@ -8,6 +8,7 @@ Date: 2026-09-07
 - Official Gateway service lifecycle and update commands.
 - Isolated one-shot `agent exec` validation without writing to `session main`.
 - Docker authenticated startup configuration.
+- Native Windows PowerShell entry point with UTF-8 console setup.
 - Tuzi/GAC provider writes, model selection, and Feishu setup path.
 - macOS Intel/Apple Silicon, Linux, root/no-sudo, and Windows/WSL2 branching.
 
@@ -27,13 +28,14 @@ Date: 2026-09-07
 | Node version boundary and platform branch checks | Reject unsupported Node 23/old minors and direct Windows to PowerShell/WSL2 | Passed |
 | Installer AI test command | Uses `openclaw agent exec` with temporary isolated state instead of a Gateway session | Passed by static review |
 | Architecture branch inspection | Recognize amd64/arm64 families and warn on unknown values | Passed by static review |
+| Windows native installer | Uses PowerShell, official installer, and onboarding without Bash prompts | Passed by static review |
 
 ## Not Executed
 
 - A real installation/update was not run on the host, so no global npm package or user configuration was changed.
 - Gateway, Tuzi/GAC API, and Feishu wizard end-to-end tests require isolated credentials and a real OpenClaw runtime.
 - Docker `linux/arm64` image build was attempted but could not fetch the anonymous Docker Hub token before the network deadline; Dockerfile syntax and Compose rendering passed, but image build remains unverified.
-- Native Windows, Linux distributions other than the current host, and both macOS CPU variants were not booted in this environment; those paths are covered by static branch checks only.
+- Native Windows, Linux distributions other than the current host, and both macOS CPU variants were not booted in this environment; those paths are covered by static branch checks only. Windows PowerShell input/rendering still needs validation on a Windows host.
 
 ## Residual Risk
 

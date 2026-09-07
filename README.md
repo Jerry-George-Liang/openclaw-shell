@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Version-1.0.0-blue.svg" alt="Version">
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-green.svg" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-green.svg" alt="Platform">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
 </p>
 
@@ -57,7 +57,24 @@ curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/m
 5. **自动启动 OpenClaw 服务**
 6. 可选打开配置菜单进行详细配置（渠道等）
 
-> Windows 原生环境请先在 PowerShell 运行官方安装器：`iwr -useb https://openclaw.ai/install.ps1 | iex`，或使用 WSL2 运行本 Bash 脚本。Git Bash/Cygwin 会被脚本明确拒绝，避免半安装状态。
+> Windows 原生环境请在 PowerShell 运行本项目入口：`irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex`。它会设置 UTF-8、调用官方安装器并引导 onboarding。不要在 `cmd.exe` 或 Git Bash 中运行 `install.sh`；如需 Bash 流程，请使用 WSL2。
+
+#### Windows 原生安装
+
+在 Windows PowerShell 5.1+ 或 PowerShell 7 中执行：
+
+```powershell
+irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex
+```
+
+已经安装 OpenClaw、需要跳过官方安装或 onboarding 时，先下载再带参数运行：
+
+```powershell
+irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 -OutFile .\install-windows.ps1
+& .\install-windows.ps1 -SkipOfficialInstall -NoOnboard
+```
+
+Windows 下启动：`openclaw gateway start`；打开持续会话界面：`openclaw tui`。
 
 ### 方式二：手动安装
 

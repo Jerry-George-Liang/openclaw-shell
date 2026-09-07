@@ -54,6 +54,15 @@ GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main"
 INSTALL_MODE=""
 FORCE_REINSTALL="false"
 
+# Git Bash/Cygwin on Windows cannot provide a reliable native interactive
+# terminal for this Bash installer. Fail before any prompt is printed.
+if [[ "$OSTYPE" == msys* || "$OSTYPE" == mingw* || "$OSTYPE" == cygwin* ]]; then
+    echo "Windows native mode detected. Run this from PowerShell instead:" >&2
+    echo "  irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex" >&2
+    echo "Or run this Bash installer inside WSL2." >&2
+    exit 1
+fi
+
 # ================================ 工具函数 ================================
 
 print_banner() {
