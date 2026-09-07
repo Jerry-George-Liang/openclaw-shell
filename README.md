@@ -31,7 +31,7 @@
 |------|------|
 | 操作系统 | macOS 12+（Intel/Apple Silicon）/ Ubuntu 20.04+ / Debian 11+ / CentOS 8+；Windows 建议 WSL2 |
 | CPU 架构 | 原生安装支持 x86_64/amd64、arm64/aarch64；Docker 使用对应的 multi-arch Node 基础镜像 |
-| Node.js | 22.22.3+、24.15.0+、25.9.0+ 或 26+（不支持 Node 23） |
+| Node.js | 新安装固定 Node.js 22 LTS（最低 22.22.3）；已有 22.22.3+、24.15.0+、25.9.0+ 或 26+ 可继续使用（不支持 Node 23） |
 | 内存 | 最低 2GB，推荐 4GB+ |
 | 磁盘空间 | 最低 1GB |
 
@@ -502,8 +502,8 @@ export TELEGRAM_BOT_TOKEN="xxx"
 # macOS
 brew install node
 
-# Ubuntu/Debian（Node 24 LTS）
-curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+# Ubuntu/Debian（Node 22 LTS）
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 

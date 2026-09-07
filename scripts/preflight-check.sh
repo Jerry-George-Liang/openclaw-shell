@@ -57,6 +57,9 @@ require_text '/home/node/.openclaw' Dockerfile docker-entrypoint.sh docker-compo
 require_text '只更新当前提供商变量' config-menu.sh
 require_text 'gateway.auth.mode' install.sh config-menu.sh
 require_text 'Windows 请在 PowerShell' install.sh
+require_text 'NODE_INSTALL_MAJOR="22"' install.sh
+require_text 'setup_${NODE_INSTALL_MAJOR}.x' install.sh
+require_text 'node@22' install.sh
 require_text 'OSTYPE" == mingw*' install.sh config-menu.sh
 require_text 'run_privileged' install.sh
 require_text 'CPU 架构' install.sh

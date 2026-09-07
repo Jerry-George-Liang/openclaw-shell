@@ -4,7 +4,7 @@ Date: 2026-09-07
 
 ## Scope
 
-- Installer Node.js compatibility gates (22.22.3+, 24.15.0+, 25.9.0+, or 26+) and installation commands.
+- Installer Node.js compatibility gates (22.22.3+, 24.15.0+, 25.9.0+, or 26+) and stable Node.js 22 LTS installation commands.
 - Official Gateway service lifecycle and update commands.
 - Isolated one-shot `agent exec` validation without writing to `session main`.
 - Docker authenticated startup configuration.
@@ -29,6 +29,7 @@ Date: 2026-09-07
 | Installer AI test command | Uses `openclaw agent exec` with temporary isolated state instead of a Gateway session | Passed by static review |
 | Architecture branch inspection | Recognize amd64/arm64 families and warn on unknown values | Passed by static review |
 | Windows native installer | Uses PowerShell, official installer, and onboarding without Bash prompts | Passed by static review |
+| New Node.js installation line | Installs Node.js 22 LTS on Homebrew/NodeSource while retaining supported newer existing versions | Passed by static review |
 
 ## Not Executed
 

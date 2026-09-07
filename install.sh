@@ -49,6 +49,7 @@ TUZI_CACHE_DIR="$CONFIG_DIR/cache"
 MIN_NODE_22="22.22.3"
 MIN_NODE_24="24.15.0"
 MIN_NODE_25="25.9.0"
+NODE_INSTALL_MAJOR="22"
 GITHUB_REPO="Jerry-George-Liang/openclaw-shell"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main"
 INSTALL_MODE=""
@@ -1051,14 +1052,16 @@ install_nodejs() {
     case "$OS" in
         macos)
             install_homebrew
-            brew install node
+            # Pin new Homebrew installations to the Node.js 22 LTS line.
+            brew install node@22
+            brew link --overwrite --force node@22 >/dev/null 2>&1 || true
             ;;
         ubuntu|debian)
-            curl -fsSL https://deb.nodesource.com/setup_24.x | run_privileged bash
+            curl -fsSL https://deb.nodesource.com/setup_${NODE_INSTALL_MAJOR}.x | run_privileged bash
             run_privileged apt-get install -y nodejs
             ;;
         centos|rhel|fedora)
-            curl -fsSL https://rpm.nodesource.com/setup_24.x | run_privileged bash -
+            curl -fsSL https://rpm.nodesource.com/setup_${NODE_INSTALL_MAJOR}.x | run_privileged bash -
             if [ "$PACKAGE_MANAGER" = "dnf" ]; then
                 run_privileged dnf install -y nodejs
             else
