@@ -60,6 +60,8 @@ require_text 'Windows 请在 PowerShell' install.sh
 require_text 'NODE_INSTALL_MAJOR="22"' install.sh
 require_text 'setup_${NODE_INSTALL_MAJOR}.x' install.sh
 require_text 'node@22' install.sh
+require_text 'brew unlink node' install.sh
+require_text 'brew --prefix node@22' install.sh
 require_text 'OSTYPE" == mingw*' install.sh config-menu.sh
 require_text 'run_privileged' install.sh
 require_text 'CPU 架构' install.sh

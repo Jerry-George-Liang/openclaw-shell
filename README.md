@@ -501,6 +501,7 @@ export TELEGRAM_BOT_TOKEN="xxx"
 ```bash
 # macOS
 brew install node@22
+brew unlink node
 brew link --overwrite --force node@22
 
 # Ubuntu/Debian（Node 22 LTS）

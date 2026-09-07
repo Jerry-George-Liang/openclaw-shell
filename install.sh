@@ -1054,7 +1054,17 @@ install_nodejs() {
             install_homebrew
             # Pin new Homebrew installations to the Node.js 22 LTS line.
             brew install node@22
+            # node@22 is keg-only; unlink a newer node first so PATH cannot
+            # keep resolving the old unsupported binary.
+            brew unlink node >/dev/null 2>&1 || true
             brew link --overwrite --force node@22 >/dev/null 2>&1 || true
+            local node22_prefix
+            node22_prefix=$(brew --prefix node@22 2>/dev/null || true)
+            if [ -n "$node22_prefix" ] && [ -x "$node22_prefix/bin/node" ]; then
+                export PATH="$node22_prefix/bin:$PATH"
+                hash -r 2>/dev/null || true
+                ensure_path_export "export PATH=\"$node22_prefix/bin:\$PATH\""
+            fi
             ;;
         ubuntu|debian)
             curl -fsSL https://deb.nodesource.com/setup_${NODE_INSTALL_MAJOR}.x | run_privileged bash
@@ -1077,12 +1087,12 @@ install_nodejs() {
             ;;
     esac
 
-    if ! check_command node || ! is_supported_node_version "$(node -v | sed 's/^v//')"; then
+    if ! check_command node || ! check_command npm || ! is_supported_node_version "$(node -v | sed 's/^v//')"; then
         log_error "Node.js 安装后版本仍不兼容: $(node -v 2>/dev/null || echo '未安装')"
         exit 1
     fi
     
-    log_info "Node.js 安装完成: $(node -v)"
+    log_info "Node.js 安装完成: $(node -v)，npm $(npm --version)"
 }
 
 install_git() {
