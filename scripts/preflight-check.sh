@@ -34,6 +34,8 @@ for forbidden in \
 done
 
 require_text 'openclaw gateway install' install.sh config-menu.sh
+require_text 'openclaw agent exec' install.sh config-menu.sh
+require_text '不写入会话历史' install.sh config-menu.sh
 require_text 'GITHUB_REPO="Jerry-George-Liang/openclaw-shell"' install.sh
 require_text 'openclaw update --dry-run' config-menu.sh
 require_text 'package manager owner is unknown' config-menu.sh

@@ -6,6 +6,7 @@ Date: 2026-09-07
 
 - Installer Node.js compatibility gates (22.22.3+, 24.15.0+, 25.9.0+, or 26+) and installation commands.
 - Official Gateway service lifecycle and update commands.
+- Isolated one-shot `agent exec` validation without writing to `session main`.
 - Docker authenticated startup configuration.
 - Tuzi/GAC provider writes, model selection, and Feishu setup path.
 - macOS Intel/Apple Silicon, Linux, root/no-sudo, and Windows/WSL2 branching.
@@ -24,6 +25,7 @@ Date: 2026-09-07
 | Isolated configuration-menu save | Existing environment variables survive a Tuzi save and resulting config validates | Passed |
 | `set_env_kv` isolated shell test | Updating one provider preserves unrelated environment variables | Passed |
 | Node version boundary and platform branch checks | Reject unsupported Node 23/old minors and direct Windows to PowerShell/WSL2 | Passed |
+| Installer AI test command | Uses `openclaw agent exec` with temporary isolated state instead of a Gateway session | Passed by static review |
 | Architecture branch inspection | Recognize amd64/arm64 families and warn on unknown values | Passed by static review |
 
 ## Not Executed

@@ -202,22 +202,12 @@ extract_openclaw_test_error() {
     echo "$output" | grep -iE "HTTP 401|HTTP 403|authentication_error|authentication failed|Invalid bearer token|Incorrect API|Unknown model|API key|超时" | head -5
 }
 
-get_openclaw_agent_test_mode() {
-    if run_with_timeout 5 openclaw health >/dev/null 2>&1; then
-        printf '%s' "gateway"
-    else
-        printf '%s' "local"
-    fi
-}
-
 run_openclaw_agent_test() {
-    if [ "$(get_openclaw_agent_test_mode)" = "gateway" ]; then
-        echo -e "${GRAY}Gateway 正在运行，使用服务模式测试。${NC}" >&2
-        run_with_timeout 30 openclaw agent --to "+1234567890" --message "回复 OK"
-    else
-        echo -e "${GRAY}Gateway 未运行，使用本地模式测试。${NC}" >&2
-        run_with_timeout 30 openclaw agent --local --to "+1234567890" --message "回复 OK"
-    fi
+    echo -e "${GRAY}使用隔离 agent exec 测试，不写入会话历史。${NC}" >&2
+    run_with_timeout 30 openclaw agent exec \
+        --config "$HOME/.openclaw/openclaw.json" \
+        --timeout 25 \
+        "回复 OK"
 }
 
 get_expected_tuzi_provider_prefix() {

@@ -331,6 +331,8 @@ openclaw logs
 openclaw logs --follow
 ```
 
+> 说明：`openclaw tui` 默认显示 `session main`，这是持续对话会话，会保留上下文。安装脚本和配置菜单的 AI 连通性测试使用隔离的 `openclaw agent exec`，只验证单次响应，不会写入 `session main`。
+
 ### 配置管理
 
 ```bash
