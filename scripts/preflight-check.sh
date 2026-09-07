@@ -20,9 +20,11 @@ for script_file in install.sh config-menu.sh docker-entrypoint.sh scripts/prefli
 done
 
 test -f install-windows.ps1 || fail "missing native Windows installer"
+test -f install-windows.cmd || fail "missing cmd.exe Windows launcher"
 rg -Fq -- "openclaw.ai/install.ps1" install-windows.ps1 || fail "Windows installer does not use official installer"
 rg -Fq -- "openclaw onboard" install-windows.ps1 || fail "Windows onboarding path is missing"
 rg -Fq -- "Do not run install.sh from cmd.exe or Git Bash" install-windows.ps1 || fail "Windows terminal guidance is missing"
+rg -Fq -- "Invoke-RestMethod" install-windows.cmd || fail "cmd.exe launcher does not delegate to PowerShell"
 
 for forbidden in \
     'models.default' \

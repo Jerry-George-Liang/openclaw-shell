@@ -9,6 +9,7 @@ Date: 2026-09-07
 - Isolated one-shot `agent exec` validation without writing to `session main`.
 - Docker authenticated startup configuration.
 - Native Windows PowerShell entry point with UTF-8 console setup.
+- Native `cmd.exe` launcher delegating to PowerShell.
 - Tuzi/GAC provider writes, model selection, and Feishu setup path.
 - macOS Intel/Apple Silicon, Linux, root/no-sudo, and Windows/WSL2 branching.
 
@@ -29,6 +30,7 @@ Date: 2026-09-07
 | Installer AI test command | Uses `openclaw agent exec` with temporary isolated state instead of a Gateway session | Passed by static review |
 | Architecture branch inspection | Recognize amd64/arm64 families and warn on unknown values | Passed by static review |
 | Windows native installer | Uses PowerShell, official installer, and onboarding without Bash prompts | Passed by static review |
+| Windows cmd launcher | Delegates from `cmd.exe` to PowerShell and avoids Bash parsing | Passed by static review |
 | New Node.js installation line | Installs Node.js 22 LTS on Homebrew/NodeSource while retaining supported newer existing versions | Passed by static review |
 
 ## Not Executed

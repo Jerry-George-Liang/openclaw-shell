@@ -67,6 +67,15 @@ curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/m
 irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex
 ```
 
+如果当前已经打开的是 `cmd.exe`，直接执行下面两行即可，脚本会自动切换到 PowerShell：
+
+```bat
+curl.exe -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.cmd -o install-windows.cmd
+install-windows.cmd
+```
+
+不要在 `cmd.exe` 中执行 `curl ... | bash`；`cmd.exe` 不支持 Bash，也无法正确处理该交互输入。
+
 已经安装 OpenClaw、需要跳过官方安装或 onboarding 时，先下载再带参数运行：
 
 ```powershell
