@@ -524,6 +524,10 @@ Windows 请使用 PowerShell 官方安装器或 WSL2，不要在 Git Bash/Cygwin
 
 新安装只固定 Node.js 22 LTS；`curl`、`wget`、`jq`、`git`、`openssl` 和 Docker 基础工具使用系统稳定仓库或 Docker 官方 multi-arch 镜像。它们在不同发行版的可用版本不同，强行固定具体小版本反而容易导致旧系统无法解析或下载。Docker 默认使用 `node:22-bookworm-slim`，也可通过 `NODE_VERSION` 明确覆盖。
 
+### Q: npm 报 `EACCES` 或提示 `.npm` 目录由 root 拥有？
+
+安装器会自动检测并修复当前用户的 `~/.npm` 缓存权限；如果系统不允许修改，则自动切换到当前用户可写的临时缓存后继续安装。不要把整个系统目录递归改成普通用户权限。
+
 ### Q: 启动后无法连接？
 
 1. 检查配置文件是否正确

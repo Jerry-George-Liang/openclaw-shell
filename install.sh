@@ -174,6 +174,34 @@ run_npm_openclaw_install() {
     npm install "${install_args[@]}"
 }
 
+prepare_npm_cache() {
+    local npm_cache="${NPM_CONFIG_CACHE:-$HOME/.npm}"
+    local current_uid current_user
+    current_uid=$(id -u)
+    current_user=$(id -un)
+
+    mkdir -p "$npm_cache" 2>/dev/null || true
+    if [ -d "$npm_cache" ] && find "$npm_cache" -xdev ! -user "$current_user" -print -quit 2>/dev/null | grep -q .; then
+        log_warn "检测到 npm 缓存包含其他用户（通常是 root）创建的文件: $npm_cache"
+        if [ "${EUID:-$(id -u)}" -eq 0 ] || { command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; }; then
+            if run_privileged chown -R "$current_uid:$(id -g)" "$npm_cache" 2>/dev/null; then
+                log_info "已修复 npm 缓存目录权限"
+            fi
+        fi
+    fi
+
+    if ! mkdir -p "$npm_cache/_cacache" 2>/dev/null || ! touch "$npm_cache/.openclaw-write-test" 2>/dev/null; then
+        rm -f "$npm_cache/.openclaw-write-test" 2>/dev/null || true
+        local fallback_cache="${TMPDIR:-/tmp}/openclaw-npm-cache-${USER:-$(id -u)}"
+        mkdir -p "$fallback_cache"
+        export NPM_CONFIG_CACHE="$fallback_cache"
+        log_warn "原 npm 缓存不可写，已切换到当前用户临时缓存: $fallback_cache"
+    else
+        rm -f "$npm_cache/.openclaw-write-test" 2>/dev/null || true
+        export NPM_CONFIG_CACHE="$npm_cache"
+    fi
+}
+
 begin_config_transaction() {
     local config_file="$1"
     local backup_file="${config_file}.openclaw-installer-backup.$$"
@@ -1159,6 +1187,7 @@ create_directories() {
 
 install_openclaw() {
     log_step "安装 OpenClaw..."
+    prepare_npm_cache
     
     # 检查是否已安装
     if check_command openclaw; then
