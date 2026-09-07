@@ -5,7 +5,7 @@
 # 运行: docker run -d --name openclaw -v ~/.openclaw:/home/node/.openclaw openclaw
 # ============================================================
 
-ARG NODE_VERSION=24-bookworm-slim
+ARG NODE_VERSION=22-bookworm-slim
 FROM node:${NODE_VERSION}
 
 LABEL maintainer="OpenClaw Community"

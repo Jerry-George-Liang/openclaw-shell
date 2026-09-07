@@ -50,7 +50,7 @@ require_text '@openclaw/feishu' config-menu.sh
 require_text '--allow-scripts=openclaw' install.sh Dockerfile
 require_text 'gateway run' Dockerfile README.md
 require_text 'OPENCLAW_GATEWAY_TOKEN' docker-entrypoint.sh docker-compose.yml README.md
-require_text '24-bookworm-slim' Dockerfile docker-compose.yml
+require_text '22-bookworm-slim' Dockerfile docker-compose.yml
 require_text 'tini' Dockerfile
 require_text 'USER node' Dockerfile
 require_text '/home/node/.openclaw' Dockerfile docker-entrypoint.sh docker-compose.yml

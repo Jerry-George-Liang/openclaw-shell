@@ -35,7 +35,7 @@ Date: 2026-09-07
 
 - A real installation/update was not run on the host, so no global npm package or user configuration was changed.
 - Gateway, Tuzi/GAC API, and Feishu wizard end-to-end tests require isolated credentials and a real OpenClaw runtime.
-- Docker `linux/arm64` image build was attempted but could not fetch the anonymous Docker Hub token before the network deadline; Dockerfile syntax and Compose rendering passed, but image build remains unverified.
+- Docker `linux/arm64` image build was attempted but could not fetch the anonymous Docker Hub token before the network deadline; Dockerfile syntax and Compose rendering passed, but image build remains unverified. The default base is pinned to Node 22 LTS (`node:22-bookworm-slim`).
 - Native Windows, Linux distributions other than the current host, and both macOS CPU variants were not booted in this environment; those paths are covered by static branch checks only. Windows PowerShell input/rendering still needs validation on a Windows host.
 
 ## Residual Risk
@@ -45,3 +45,4 @@ Date: 2026-09-07
 - A direct npm fallback install may not carry the package-manager ownership metadata required by `openclaw update`; the configuration menu now reports this case and points to reinstalling through the official installer.
 - Docker uses the official Debian slim multi-architecture Node base image, `tini`, and non-root `node` user; actual image pulls and native-module builds still need CI coverage on `linux/amd64` and `linux/arm64`.
 - Docker bind mounts can fail on Linux when the host directory is not writable by container UID 1000; the entrypoint now reports this explicitly and the README documents the `chown` or named-volume options.
+- System utilities (`curl`, `wget`, `jq`, `git`, `openssl`) intentionally follow the host distribution's stable repositories rather than a single global version because package availability and ABI compatibility vary across supported distributions.

@@ -500,7 +500,8 @@ export TELEGRAM_BOT_TOKEN="xxx"
 
 ```bash
 # macOS
-brew install node
+brew install node@22
+brew link --overwrite --force node@22
 
 # Ubuntu/Debian（Node 22 LTS）
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
@@ -508,6 +509,10 @@ sudo apt-get install -y nodejs
 ```
 
 Windows 请使用 PowerShell 官方安装器或 WSL2，不要在 Git Bash/Cygwin 中尝试执行本脚本。
+
+### Q: 其他依赖是否需要手动固定版本？
+
+新安装只固定 Node.js 22 LTS；`curl`、`wget`、`jq`、`git`、`openssl` 和 Docker 基础工具使用系统稳定仓库或 Docker 官方 multi-arch 镜像。它们在不同发行版的可用版本不同，强行固定具体小版本反而容易导致旧系统无法解析或下载。Docker 默认使用 `node:22-bookworm-slim`，也可通过 `NODE_VERSION` 明确覆盖。
 
 ### Q: 启动后无法连接？
 
