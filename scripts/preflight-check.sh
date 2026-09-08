@@ -42,6 +42,10 @@ require_text 'windowsCleanupOnly' install-windows.ps1
 require_text 'provider-transport-fetch.*response.*status=200' install-windows.ps1
 require_text 'Agent exec cleanup failed:.*EBUSY' install-windows.ps1
 require_text '本次结果按连接成功处理' install-windows.ps1
+require_text 'Remove-AgentExecTempState' install-windows.ps1
+require_text "\$agentName -like 'openclaw-agent-exec-*'" install-windows.ps1
+require_text '[StringComparison]::OrdinalIgnoreCase' install-windows.ps1
+require_text '安装器已清除本次隔离测试目录' install-windows.ps1
 require_text "\$ErrorActionPreference = 'Continue'" install-windows.ps1
 require_text '$ErrorActionPreference = $previousErrorActionPreference' install-windows.ps1
 require_text 'NativeCommandError' install-windows.ps1

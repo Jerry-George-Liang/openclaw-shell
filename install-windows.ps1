@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.08.5'
+$InstallerVersion = '2026.09.08.6'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -443,6 +443,43 @@ function Configure-Tuzi {
     }
 }
 
+function Remove-AgentExecTempState([string]$AgentText) {
+    $pathMatch = [regex]::Match(
+        $AgentText,
+        "(?im)Agent exec cleanup failed:.*?unlink\s+['`"](?<path>[^'`"`r`n]+openclaw\.sqlite)['`"]"
+    )
+    if (-not $pathMatch.Success) { return $false }
+
+    try {
+        $sqlitePath = [IO.Path]::GetFullPath($pathMatch.Groups['path'].Value)
+        $stateDir = Split-Path -Parent $sqlitePath
+        $agentDir = Split-Path -Parent $stateDir
+        $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
+        $agentParent = [IO.Path]::GetFullPath((Split-Path -Parent $agentDir)).TrimEnd('\', '/')
+        $agentName = Split-Path -Leaf $agentDir
+
+        $validTarget = (
+            [string]::Equals($agentParent, $tempRoot, [StringComparison]::OrdinalIgnoreCase) -and
+            $agentName -like 'openclaw-agent-exec-*' -and
+            (Split-Path -Leaf $stateDir) -eq 'state' -and
+            (Split-Path -Leaf $sqlitePath) -eq 'openclaw.sqlite'
+        )
+        if (-not $validTarget) { return $false }
+
+        for ($attempt = 1; $attempt -le 5; $attempt++) {
+            try {
+                if (Test-Path -LiteralPath $agentDir) {
+                    Remove-Item -LiteralPath $agentDir -Recurse -Force -ErrorAction Stop
+                }
+                if (-not (Test-Path -LiteralPath $agentDir)) { return $true }
+            } catch {
+                if ($attempt -lt 5) { Start-Sleep -Milliseconds 300 }
+            }
+        }
+    } catch {}
+    return $false
+}
+
 function Test-TuziConnection([string]$ConfigPath, [string]$OpenClawPath) {
     if ([string]::IsNullOrWhiteSpace($OpenClawPath)) {
         Write-Host '[WARN] 当前终端暂时找不到可运行的 openclaw 命令，已跳过 AI 连接测试。' -ForegroundColor Yellow
@@ -481,8 +518,12 @@ function Test-TuziConnection([string]$ConfigPath, [string]$OpenClawPath) {
     if ($agentExitCode -eq 0) {
         Write-Host 'OpenClaw AI 测试成功。' -ForegroundColor Green
     } elseif ($windowsCleanupOnly) {
-        Write-Host '[WARN] AI 请求已成功，但 Windows 临时状态文件被进程占用，清理会稍后完成。' -ForegroundColor Yellow
-        Write-Host '本次结果按连接成功处理；不会删除或修改你的主会话数据。' -ForegroundColor DarkGray
+        if (Remove-AgentExecTempState $agentText) {
+            Write-Host '[WARN] AI 请求已成功；Windows 文件锁导致 OpenClaw 首次清理失败，安装器已清除本次隔离测试目录。' -ForegroundColor Yellow
+        } else {
+            Write-Host '[WARN] AI 请求已成功，但本次隔离测试的临时目录未能清理。' -ForegroundColor Yellow
+        }
+        Write-Host '本次结果按连接成功处理；未读取、删除或修改你的主配置和主会话数据。' -ForegroundColor DarkGray
     } else {
         Write-Host '[WARN] AI 测试失败，但已保存的配置未删除。上游过载时可稍后重试。' -ForegroundColor Yellow
         Write-Host "重试命令: openclaw agent exec --config `"$ConfigPath`" --timeout 25 '回复 OK'" -ForegroundColor DarkGray
