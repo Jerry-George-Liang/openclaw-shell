@@ -1,2 +1,13 @@
 tmp.txt
 README-mo.md
+.DS_Store
+.openclaw/
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.jsonl
+logs/
+backups/
