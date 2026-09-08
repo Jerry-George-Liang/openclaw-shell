@@ -104,6 +104,8 @@ openclaw gateway status --deep
 
 根据输出停止对应服务，再执行 `openclaw doctor --fix`；修复后运行 `openclaw gateway install` 和 `openclaw gateway start`。如果安装刚完成而当前终端还没有刷新 npm 命令路径，脚本仍会完成 Tuzi 配置，只跳过 CLI 测试和 Gateway 操作；重新打开 PowerShell 后再运行这些命令即可。
 
+在服务归属处理完成前，不要重复运行 `openclaw gateway start`。如需先临时使用，可在一个 PowerShell 窗口运行 `openclaw gateway run` 并保持窗口打开，再在另一个窗口运行 `openclaw tui`。
+
 ### 方式二：手动安装
 
 ```bash

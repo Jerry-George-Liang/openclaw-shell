@@ -64,6 +64,8 @@ require_text 'gatewayOwnershipFailure' install-windows.ps1
 require_text 'knownGatewayMigrationFailure' install-windows.ps1
 require_text '-NoOnboard 2>&1 6>&1' install-windows.ps1
 require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path' install-windows.ps1
+require_text 'Inspect the existing service: openclaw gateway status --deep' install-windows.ps1
+require_text 'Temporary foreground Gateway: openclaw gateway run' install-windows.ps1
 require_text 'bak-' install-windows.ps1
 if rg -Fq -- '& openclaw onboard' install-windows.ps1; then
     fail "Windows installer still launches the official provider onboarding"
