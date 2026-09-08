@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.08.7'
+$InstallerVersion = '2026.09.08.9'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -530,7 +530,79 @@ function Test-TuziConnection([string]$ConfigPath, [string]$OpenClawPath) {
     }
 }
 
-function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath) {
+function Invoke-OpenClawStateRepair([string]$OpenClawPath) {
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        Write-Host ''
+        Write-Host "运行 OpenClaw 状态修复 (第 $attempt 次)..." -ForegroundColor Cyan
+        $repairOutput = @()
+        $repairExitCode = 1
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            # Windows PowerShell 5.1 can surface native stderr as a terminating record.
+            $ErrorActionPreference = 'Continue'
+            & $OpenClawPath doctor --fix 2>&1 |
+                ForEach-Object {
+                    $line = $_.ToString()
+                    $repairOutput += $line
+                    Write-Host $line
+                }
+            $repairExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+
+        if ($repairExitCode -eq 0) {
+            Write-Host 'OpenClaw 状态迁移修复成功。' -ForegroundColor Green
+            return $true
+        }
+
+        $repairText = $repairOutput -join "`n"
+        $legacyAgentBackup = (
+            $repairText -match '(?i)Left legacy agent dir at .*agent\.legacy-' -and
+            $repairText -match '(?i)Doctor stopped because a state migration refused to continue'
+        )
+        if ($attempt -eq 1 -and $legacyAgentBackup) {
+            Write-Host '[WARN] Doctor 已保留 agent.legacy-* 旧状态备份；将再运行一次以继续后续迁移。' -ForegroundColor Yellow
+            continue
+        }
+
+        Write-Host '[WARN] OpenClaw 状态迁移仍未完成，保留现有配置和 legacy 备份目录。' -ForegroundColor Yellow
+        return $false
+    }
+    return $false
+}
+
+function Test-OpenClawGatewayReady([string]$OpenClawPath) {
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        if ($attempt -gt 1) { Start-Sleep -Seconds 2 }
+        $statusOutput = @()
+        $statusExitCode = 1
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $statusOutput = @(& $OpenClawPath gateway status --deep --json 2>&1)
+            $statusExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if ($statusOutput.Count -eq 0) { continue }
+
+        try {
+            $statusText = ($statusOutput | ForEach-Object { $_.ToString() }) -join "`n"
+            $status = $statusText | ConvertFrom-Json
+            if ($status.rpc.ok -eq $true -and $status.service.runtime.status -eq 'running') {
+                return $true
+            }
+        } catch {
+            if ($statusExitCode -eq 0 -and $statusText -match '(?i)Connectivity probe:\s*ok') {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath, [bool]$ForceReinstall = $false) {
     Write-Host ''
     Write-Host '第 3 步: 配置 Gateway' -ForegroundColor Cyan
     if ($NeedsManualRepair) {
@@ -549,20 +621,24 @@ function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath)
     }
 
     if (Confirm-Choice '是否安装 Gateway 系统服务并设置开机启动？' $true) {
-        & $OpenClawPath gateway install
+        $installArgs = @('gateway', 'install')
+        if ($ForceReinstall) { $installArgs += '--force' }
+        & $OpenClawPath @installArgs
         if ($LASTEXITCODE -eq 0) {
             Write-Host 'Gateway 系统服务已安装。' -ForegroundColor Green
         } else {
             Write-Host '[WARN] Gateway 系统服务安装失败，可稍后用管理员终端重试。' -ForegroundColor Yellow
+            return
         }
     }
 
     if (Confirm-Choice '是否现在启动 Gateway？' $true) {
         & $OpenClawPath gateway start
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host 'Gateway 已启动。' -ForegroundColor Green
+        if ($LASTEXITCODE -eq 0 -and (Test-OpenClawGatewayReady $OpenClawPath)) {
+            Write-Host 'Gateway 已启动并通过连接检查。' -ForegroundColor Green
         } else {
-            Write-Host '[WARN] Gateway 启动失败，请运行 openclaw doctor 检查。' -ForegroundColor Yellow
+            Write-Host '[WARN] Gateway 启动后未通过连接检查，计划任务可能立即退出。' -ForegroundColor Yellow
+            Write-Host '请运行 openclaw gateway status --deep 查看日志路径和退出状态。' -ForegroundColor Cyan
         }
     }
 }
@@ -628,7 +704,13 @@ if (-not $SkipTuziConfig) {
     Test-TuziConnection $tuzi.ConfigPath $openclawRuntime.Path
 }
 
-Setup-Gateway $officialInstallerWarning $openclawRuntime.Path
+$stateRepairCompleted = $false
+if ($officialInstallerWarning -and -not [string]::IsNullOrWhiteSpace($openclawRuntime.Path)) {
+    $stateRepairCompleted = Invoke-OpenClawStateRepair $openclawRuntime.Path
+    if ($stateRepairCompleted) { $officialInstallerWarning = $false }
+}
+
+Setup-Gateway $officialInstallerWarning $openclawRuntime.Path $stateRepairCompleted
 
 Write-Host ''
 if ($officialInstallerWarning) {

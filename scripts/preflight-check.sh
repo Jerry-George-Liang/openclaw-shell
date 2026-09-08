@@ -64,6 +64,15 @@ require_text 'gatewayOwnershipFailure' install-windows.ps1
 require_text 'knownGatewayMigrationFailure' install-windows.ps1
 require_text '-NoOnboard 2>&1 6>&1' install-windows.ps1
 require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path' install-windows.ps1
+require_text 'Invoke-OpenClawStateRepair' install-windows.ps1
+require_text 'Left legacy agent dir at .*agent\.legacy-' install-windows.ps1
+require_text '状态迁移修复成功' install-windows.ps1
+require_text "\$installArgs += '--force'" install-windows.ps1
+require_text 'Test-OpenClawGatewayReady' install-windows.ps1
+require_text 'gateway status --deep --json' install-windows.ps1
+require_text 'Gateway 已启动并通过连接检查' install-windows.ps1
+require_text '计划任务可能立即退出' install-windows.ps1
+require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path $stateRepairCompleted' install-windows.ps1
 require_text 'Inspect the existing service: openclaw gateway status --deep' install-windows.ps1
 require_text 'Temporary foreground Gateway: openclaw gateway run' install-windows.ps1
 require_text 'bak-' install-windows.ps1

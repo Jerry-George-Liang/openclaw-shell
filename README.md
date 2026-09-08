@@ -106,6 +106,8 @@ openclaw gateway status --deep
 
 在服务归属处理完成前，不要重复运行 `openclaw gateway start`。如需先临时使用，可在一个 PowerShell 窗口运行 `openclaw gateway run` 并保持窗口打开，再在另一个窗口运行 `openclaw tui`。
 
+新版 Windows 脚本遇到 `agent.legacy-*` 状态迁移备份时，会自动再次运行一次 `openclaw doctor --fix`；修复成功后通过官方 `openclaw gateway install --force` 重建当前账号的计划任务。旧目录始终保留，不会被脚本删除。
+
 ### 方式二：手动安装
 
 ```bash
