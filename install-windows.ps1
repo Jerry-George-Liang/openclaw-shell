@@ -344,9 +344,18 @@ function Test-TuziConnection([string]$ConfigPath) {
     }
 }
 
-function Setup-Gateway {
+function Setup-Gateway([bool]$NeedsManualRepair = $false) {
     Write-Host ''
     Write-Host '第 3 步: 配置 Gateway' -ForegroundColor Cyan
+    if ($NeedsManualRepair) {
+        Write-Host '[WARN] 官方安装器未能确认现有 Gateway 服务的归属。' -ForegroundColor Yellow
+        Write-Host '为避免覆盖其他服务，本次不会自动安装、停止或重启 Gateway。' -ForegroundColor Yellow
+        Write-Host '请先运行: openclaw gateway status --deep' -ForegroundColor Cyan
+        Write-Host '根据输出停止对应服务后运行: openclaw doctor --fix' -ForegroundColor Cyan
+        Write-Host '修复完成后运行: openclaw gateway install; openclaw gateway start' -ForegroundColor Cyan
+        return
+    }
+
     if (Confirm-Choice '是否安装 Gateway 系统服务并设置开机启动？' $true) {
         & openclaw gateway install
         if ($LASTEXITCODE -eq 0) {
@@ -374,11 +383,45 @@ if ($PSVersionTable.PSVersion.Major -lt 5) {
     Fail 'PowerShell 5.1 or newer is required.'
 }
 
+$officialInstallerWarning = $false
 if (-not $SkipOfficialInstall) {
     Write-Host 'Installing/updating OpenClaw with the official installer...' -ForegroundColor Yellow
     Require-Command 'Invoke-RestMethod'
     $official = Invoke-RestMethod -Uri 'https://openclaw.ai/install.ps1'
-    & ([scriptblock]::Create([string]$official)) -NoOnboard
+    $officialOutput = @()
+    try {
+        & ([scriptblock]::Create([string]$official)) -NoOnboard 6>&1 |
+            ForEach-Object {
+                $officialOutput += $_
+                Write-Host $_
+            }
+    } catch {
+        $officialText = @($officialOutput | ForEach-Object { $_.ToString() }) -join "`n"
+        $knownGatewayMigrationFailure = (
+            $officialText -match '(?i)OpenClaw installed' -and
+            $officialText -match 'SERVICE_DEFINITION_UNKNOWN' -and
+            $officialText -match '(?i)Migration failed'
+        )
+        if (-not $knownGatewayMigrationFailure) {
+            Fail "OpenClaw 官方安装失败: $($_.Exception.Message)"
+        }
+
+        $installedCommand = Get-Command 'openclaw' -ErrorAction SilentlyContinue
+        if ($null -eq $installedCommand) {
+            Fail "OpenClaw 官方安装失败，且 openclaw 命令不可用: $($_.Exception.Message)"
+        }
+
+        $installedVersion = (& openclaw --version 2>$null | Select-Object -First 1)
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($installedVersion)) {
+            Fail "OpenClaw 官方安装失败，且现有 openclaw 命令无法运行: $($_.Exception.Message)"
+        }
+
+        $officialInstallerWarning = $true
+        Write-Host ''
+        Write-Host '[WARN] 官方安装器的安装后迁移未完成，但 OpenClaw 命令已经可以运行。' -ForegroundColor Yellow
+        Write-Host "[WARN] 当前可用版本: $installedVersion；继续执行 Tuzi 配置。" -ForegroundColor Yellow
+        Write-Host '[WARN] 不会自动处理归属不明的旧 Gateway 服务。' -ForegroundColor Yellow
+    }
 }
 
 Require-Command 'openclaw'
@@ -395,10 +438,14 @@ if (-not $SkipTuziConfig) {
     Test-TuziConnection $tuzi.ConfigPath
 }
 
-Setup-Gateway
+Setup-Gateway $officialInstallerWarning
 
 Write-Host ''
-Write-Host 'Installation complete.' -ForegroundColor Green
+if ($officialInstallerWarning) {
+    Write-Host 'OpenClaw and Tuzi setup complete with a Gateway service warning.' -ForegroundColor Yellow
+} else {
+    Write-Host 'Installation complete.' -ForegroundColor Green
+}
 Write-Host 'Start the Gateway: openclaw gateway start'
 Write-Host 'Open the terminal UI: openclaw tui'
 Write-Host 'Configure Tuzi again: irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex'

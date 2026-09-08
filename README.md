@@ -94,6 +94,14 @@ Windows 原生流程与 macOS/Linux 的核心结果保持一致：
 
 Windows 下启动：`openclaw gateway start`；打开持续会话界面：`openclaw tui`。Windows 原生脚本暂不包含 Bash 的完整渠道配置菜单；如需该菜单请使用 WSL2，或安装后使用 OpenClaw 官方渠道命令配置。
 
+如果升级已有安装时出现 `SERVICE_DEFINITION_UNKNOWN`，表示官方安装器无法安全确认旧 Gateway 服务由谁创建。新版包装脚本会在确认 `openclaw` 命令可用后继续完成 Tuzi 配置，但不会强制覆盖、停止或重启归属不明的服务。请先运行：
+
+```powershell
+openclaw gateway status --deep
+```
+
+根据输出停止对应服务，再执行 `openclaw doctor --fix`；修复后运行 `openclaw gateway install` 和 `openclaw gateway start`。如果 `openclaw` 命令本身不可用，安装器仍会停止并显示真实安装错误。
+
 ### 方式二：手动安装
 
 ```bash

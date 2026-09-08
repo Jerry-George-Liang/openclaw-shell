@@ -34,6 +34,7 @@ Date: 2026-09-08
 | Windows Tuzi providers | Writes `tuzi-claude-code` or `tuzi-codex`; GACCode writes both `gac-claude` and `gac-codex` | Passed by static review |
 | Windows configuration safety | Creates the config directory, backs up an existing config, writes via a temporary file, and keeps the API Key out of process arguments | Passed by static review |
 | Windows AI test and Gateway flow | Uses isolated `agent exec`, then offers service installation and startup | Passed by static review |
+| Windows failed post-install migration | Continues only for the exact installed + `SERVICE_DEFINITION_UNKNOWN` + migration-failed signature and a usable `openclaw --version`; skips automatic Gateway mutation | Passed by static review |
 | PowerShell parser | PowerShell 7.4 parses `install-windows.ps1` without syntax errors | Passed in a read-only Linux PowerShell container |
 | Windows embedded config writer | Fake-key writes produce the expected Claude-Code, Codex, and dual GAC providers | Passed in three isolated temporary directories |
 | New Node.js installation line | Installs Node.js 22 LTS on Homebrew/NodeSource while retaining supported newer existing versions | Passed by static review |
@@ -45,6 +46,7 @@ Date: 2026-09-08
 - Gateway, Tuzi/GAC API, and Feishu wizard end-to-end tests require isolated credentials and a real OpenClaw runtime.
 - Docker `linux/arm64` image build was attempted but could not fetch the anonymous Docker Hub token before the network deadline; Dockerfile syntax and Compose rendering passed, but image build remains unverified. The default base is pinned to Node 22 LTS (`node:22-bookworm-slim`).
 - Native Windows, Linux distributions other than the current host, and both macOS CPU variants were not booted in this environment; those paths are covered by static branch checks only. Windows PowerShell 5.1/CMD input, service installation, atomic replacement behavior, and full Tuzi/GAC calls still need validation on a Windows host.
+- The reported Windows `SERVICE_DEFINITION_UNKNOWN` upgrade path was reproduced from the official installer source, but not against the affected Windows service. The wrapper now preserves that service and requires owner-aware manual repair.
 
 ## Residual Risk
 
