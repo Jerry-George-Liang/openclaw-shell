@@ -30,6 +30,67 @@ function Require-Command([string]$Name) {
     }
 }
 
+function Resolve-OpenClawRuntime {
+    $candidates = @()
+    foreach ($name in @('openclaw.cmd', 'openclaw')) {
+        $command = Get-Command $name -ErrorAction SilentlyContinue
+        if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
+            $candidates += $command.Source
+        }
+    }
+
+    $npmPrefix = $null
+    foreach ($npmName in @('npm.cmd', 'npm.exe', 'npm')) {
+        $npmCommand = Get-Command $npmName -ErrorAction SilentlyContinue
+        if ($null -eq $npmCommand) { continue }
+        try {
+            $prefixOutput = @(& $npmCommand.Source config get prefix 2>$null)
+            if ($LASTEXITCODE -eq 0 -and $prefixOutput.Count -gt 0) {
+                $npmPrefix = $prefixOutput[-1].ToString().Trim()
+            }
+        } catch {}
+        break
+    }
+
+    $candidateDirs = @()
+    if (-not [string]::IsNullOrWhiteSpace($npmPrefix)) {
+        $candidateDirs += $npmPrefix
+        $candidateDirs += (Join-Path $npmPrefix 'bin')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:APPDATA)) {
+        $candidateDirs += (Join-Path $env:APPDATA 'npm')
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+        $candidateDirs += (Join-Path $env:USERPROFILE '.local\bin')
+    }
+    foreach ($dir in @($candidateDirs | Select-Object -Unique)) {
+        $candidates += (Join-Path $dir 'openclaw.cmd')
+        $candidates += (Join-Path $dir 'openclaw.exe')
+        $candidates += (Join-Path $dir 'openclaw')
+    }
+
+    foreach ($candidate in @($candidates | Select-Object -Unique)) {
+        if ([string]::IsNullOrWhiteSpace($candidate) -or -not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+            continue
+        }
+        try {
+            $versionOutput = @(& $candidate --version 2>$null)
+            $exitCode = $LASTEXITCODE
+            $version = @($versionOutput | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ }) | Select-Object -First 1
+            if ($exitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($version)) {
+                $commandDir = Split-Path -Parent $candidate
+                $pathParts = @($env:PATH -split ';')
+                if ($pathParts -notcontains $commandDir) {
+                    $env:PATH = "$commandDir;$env:PATH"
+                }
+                return [PSCustomObject]@{ Path = $candidate; Version = $version }
+            }
+        } catch {}
+    }
+
+    return $null
+}
+
 function Confirm-Choice([string]$Prompt, [bool]$DefaultYes = $true) {
     $suffix = if ($DefaultYes) { '[Y/n]' } else { '[y/N]' }
     $answer = (Read-Host "$Prompt $suffix").Trim()
@@ -329,13 +390,18 @@ function Configure-Tuzi {
     }
 }
 
-function Test-TuziConnection([string]$ConfigPath) {
+function Test-TuziConnection([string]$ConfigPath, [string]$OpenClawPath) {
+    if ([string]::IsNullOrWhiteSpace($OpenClawPath)) {
+        Write-Host '[WARN] 当前终端暂时找不到可运行的 openclaw 命令，已跳过 AI 连接测试。' -ForegroundColor Yellow
+        Write-Host '请关闭并重新打开 PowerShell，再运行 openclaw --version 和 openclaw doctor。' -ForegroundColor Cyan
+        return
+    }
     if (-not (Confirm-Choice '是否执行一次 AI 连接测试？' $true)) { return }
 
     Write-Host ''
     Write-Host '第 2 步: 测试 API 连接' -ForegroundColor Cyan
     Write-Host '使用隔离 openclaw agent exec 测试，不写入 session main。' -ForegroundColor DarkGray
-    & openclaw agent exec --config $ConfigPath --timeout 25 '回复 OK'
+    & $OpenClawPath agent exec --config $ConfigPath --timeout 25 '回复 OK'
     if ($LASTEXITCODE -eq 0) {
         Write-Host 'OpenClaw AI 测试成功。' -ForegroundColor Green
     } else {
@@ -344,7 +410,7 @@ function Test-TuziConnection([string]$ConfigPath) {
     }
 }
 
-function Setup-Gateway([bool]$NeedsManualRepair = $false) {
+function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath) {
     Write-Host ''
     Write-Host '第 3 步: 配置 Gateway' -ForegroundColor Cyan
     if ($NeedsManualRepair) {
@@ -356,8 +422,14 @@ function Setup-Gateway([bool]$NeedsManualRepair = $false) {
         return
     }
 
+    if ([string]::IsNullOrWhiteSpace($OpenClawPath)) {
+        Write-Host '[WARN] 当前终端暂时找不到可运行的 openclaw 命令，已跳过 Gateway 操作。' -ForegroundColor Yellow
+        Write-Host '重新打开 PowerShell 后运行: openclaw gateway install; openclaw gateway start' -ForegroundColor Cyan
+        return
+    }
+
     if (Confirm-Choice '是否安装 Gateway 系统服务并设置开机启动？' $true) {
-        & openclaw gateway install
+        & $OpenClawPath gateway install
         if ($LASTEXITCODE -eq 0) {
             Write-Host 'Gateway 系统服务已安装。' -ForegroundColor Green
         } else {
@@ -366,7 +438,7 @@ function Setup-Gateway([bool]$NeedsManualRepair = $false) {
     }
 
     if (Confirm-Choice '是否现在启动 Gateway？' $true) {
-        & openclaw gateway start
+        & $OpenClawPath gateway start
         if ($LASTEXITCODE -eq 0) {
             Write-Host 'Gateway 已启动。' -ForegroundColor Green
         } else {
@@ -410,28 +482,21 @@ if (-not $SkipOfficialInstall) {
             Fail "OpenClaw 官方安装失败: $($_.Exception.Message)"
         }
 
-        $installedCommand = Get-Command 'openclaw' -ErrorAction SilentlyContinue
-        if ($null -eq $installedCommand) {
-            Fail "OpenClaw 官方安装失败，且 openclaw 命令不可用: $($_.Exception.Message)"
-        }
-
-        $installedVersion = (& openclaw --version 2>$null | Select-Object -First 1)
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($installedVersion)) {
-            Fail "OpenClaw 官方安装失败，且现有 openclaw 命令无法运行: $($_.Exception.Message)"
-        }
-
         $officialInstallerWarning = $true
         Write-Host ''
-        Write-Host '[WARN] 官方安装器的安装后迁移未完成，但 OpenClaw 命令已经可以运行。' -ForegroundColor Yellow
-        Write-Host "[WARN] 当前可用版本: $installedVersion；继续执行 Tuzi 配置。" -ForegroundColor Yellow
-        Write-Host '[WARN] 不会自动处理归属不明的旧 Gateway 服务。' -ForegroundColor Yellow
+        Write-Host '[WARN] OpenClaw 已安装，但官方安装器的服务迁移未完成。' -ForegroundColor Yellow
+        Write-Host '[WARN] 继续执行 Tuzi 配置，不会自动处理归属不明的旧 Gateway 服务。' -ForegroundColor Yellow
     }
 }
 
-Require-Command 'openclaw'
 Require-Command 'node'
-$version = (& openclaw --version 2>$null | Select-Object -First 1)
-Write-Host "OpenClaw detected: $version" -ForegroundColor Green
+$openclawRuntime = Resolve-OpenClawRuntime
+if ($null -ne $openclawRuntime) {
+    Write-Host "OpenClaw detected: $($openclawRuntime.Version)" -ForegroundColor Green
+} else {
+    Write-Host '[WARN] OpenClaw 已安装，但当前终端尚未找到可运行的命令。' -ForegroundColor Yellow
+    Write-Host '[WARN] Tuzi 配置仍将完成；安装结束后请重新打开 PowerShell。' -ForegroundColor Yellow
+}
 
 if ($NoOnboard) {
     Write-Host 'The -NoOnboard compatibility option is no longer needed; Tuzi setup is native to this installer.' -ForegroundColor DarkGray
@@ -439,10 +504,10 @@ if ($NoOnboard) {
 
 if (-not $SkipTuziConfig) {
     $tuzi = Configure-Tuzi
-    Test-TuziConnection $tuzi.ConfigPath
+    Test-TuziConnection $tuzi.ConfigPath $openclawRuntime.Path
 }
 
-Setup-Gateway $officialInstallerWarning
+Setup-Gateway $officialInstallerWarning $openclawRuntime.Path
 
 Write-Host ''
 if ($officialInstallerWarning) {

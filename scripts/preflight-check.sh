@@ -33,14 +33,18 @@ require_text '不写入 session main' install-windows.ps1
 require_text 'openclaw gateway install' install-windows.ps1
 require_text 'openclaw gateway start' install-windows.ps1
 require_text 'openclaw gateway status --deep' install-windows.ps1
-require_text '官方安装器的安装后迁移未完成' install-windows.ps1
-require_text "Get-Command 'openclaw'" install-windows.ps1
+require_text '官方安装器的服务迁移未完成' install-windows.ps1
+require_text 'Resolve-OpenClawRuntime' install-windows.ps1
+require_text "'openclaw.cmd'" install-windows.ps1
+require_text "Join-Path \$env:APPDATA 'npm'" install-windows.ps1
+require_text '当前终端尚未找到可运行的命令' install-windows.ps1
+require_text '已跳过 AI 连接测试' install-windows.ps1
 require_text 'SERVICE_DEFINITION_UNKNOWN' install-windows.ps1
 require_text 'Gateway service ownership or shutdown could not be verified' install-windows.ps1
 require_text 'gatewayOwnershipFailure' install-windows.ps1
 require_text 'knownGatewayMigrationFailure' install-windows.ps1
 require_text '-NoOnboard 2>&1 6>&1' install-windows.ps1
-require_text 'Setup-Gateway $officialInstallerWarning' install-windows.ps1
+require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path' install-windows.ps1
 require_text 'bak-' install-windows.ps1
 if rg -Fq -- '& openclaw onboard' install-windows.ps1; then
     fail "Windows installer still launches the official provider onboarding"

@@ -100,7 +100,7 @@ Windows 下启动：`openclaw gateway start`；打开持续会话界面：`openc
 openclaw gateway status --deep
 ```
 
-根据输出停止对应服务，再执行 `openclaw doctor --fix`；修复后运行 `openclaw gateway install` 和 `openclaw gateway start`。如果 `openclaw` 命令本身不可用，安装器仍会停止并显示真实安装错误。
+根据输出停止对应服务，再执行 `openclaw doctor --fix`；修复后运行 `openclaw gateway install` 和 `openclaw gateway start`。如果安装刚完成而当前终端还没有刷新 npm 命令路径，脚本仍会完成 Tuzi 配置，只跳过 CLI 测试和 Gateway 操作；重新打开 PowerShell 后再运行这些命令即可。
 
 ### 方式二：手动安装
 
