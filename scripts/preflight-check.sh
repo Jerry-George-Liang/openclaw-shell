@@ -24,6 +24,9 @@ test -f install-windows.cmd || fail "missing cmd.exe Windows launcher"
 rg -Fq -- "openclaw.ai/install.ps1" install-windows.ps1 || fail "Windows installer does not use official installer"
 rg -Fq -- "Do not run install.sh from cmd.exe or Git Bash" install-windows.ps1 || fail "Windows terminal guidance is missing"
 rg -Fq -- "Invoke-RestMethod" install-windows.cmd || fail "cmd.exe launcher does not delegate to PowerShell"
+require_text "[Guid]::NewGuid().ToString('N')" install-windows.cmd
+require_text "'Cache-Control'='no-cache'" install-windows.cmd
+require_text "Installer version: \$InstallerVersion" install-windows.ps1
 require_text 'Configure-Tuzi' install-windows.ps1
 require_text 'https://api.tu-zi.com/v1/models' install-windows.ps1
 require_text "addProvider('gac-claude'" install-windows.ps1

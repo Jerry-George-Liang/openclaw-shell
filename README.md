@@ -57,14 +57,14 @@ curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/m
 5. **自动启动 OpenClaw 服务**
 6. 可选打开配置菜单进行详细配置（渠道等）
 
-> Windows 原生环境请在 PowerShell 运行本项目入口：`irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex`。它会设置 UTF-8、调用官方安装器并直接进入本项目的 Tuzi 配置，不再进入 OpenAI onboarding。不要在 `cmd.exe` 或 Git Bash 中运行 `install.sh`；如需 Bash 配置菜单，请使用 WSL2。
+> Windows 原生环境请在 PowerShell 运行本项目入口：`$u='https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust='+[guid]::NewGuid().ToString('N'); irm $u | iex`。动态参数用于避免 GitHub CDN 或本地缓存返回旧脚本。它会设置 UTF-8、调用官方安装器并直接进入本项目的 Tuzi 配置，不再进入 OpenAI onboarding。不要在 `cmd.exe` 或 Git Bash 中运行 `install.sh`；如需 Bash 配置菜单，请使用 WSL2。
 
 #### Windows 原生安装
 
 在 Windows PowerShell 5.1+ 或 PowerShell 7 中执行：
 
 ```powershell
-irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex
+$u='https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust='+[guid]::NewGuid().ToString('N'); irm $u | iex
 ```
 
 如果当前已经打开的是 `cmd.exe`，直接执行下面两行即可，脚本会自动切换到 PowerShell：
@@ -74,7 +74,7 @@ curl.exe -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-she
 install-windows.cmd
 ```
 
-不要在 `cmd.exe` 中执行 `curl ... | bash`；`cmd.exe` 不支持 Bash，也无法正确处理该交互输入。
+CMD 启动器每次都会使用随机参数下载最新 PowerShell 脚本。不要在 `cmd.exe` 中执行 `curl ... | bash`；`cmd.exe` 不支持 Bash，也无法正确处理该交互输入。脚本启动后应显示 `Installer version`；如果没有显示，说明运行的仍是之前保存的旧文件，请重新下载 CMD 启动器。
 
 已经安装 OpenClaw、只需要重新配置 Tuzi 时，先下载再带参数运行：
 

@@ -5,6 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$InstallerVersion = '2026.09.08.1'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -448,6 +449,7 @@ function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath)
 }
 
 Write-Host 'OpenClaw Windows installer' -ForegroundColor Cyan
+Write-Host "Installer version: $InstallerVersion" -ForegroundColor DarkGray
 Write-Host 'This is the native PowerShell entry point. Do not run install.sh from cmd.exe or Git Bash.'
 Write-Host ''
 
