@@ -31,6 +31,7 @@ Date: 2026-09-08
 | Architecture branch inspection | Recognize amd64/arm64 families and warn on unknown values | Passed by static review |
 | Windows native installer | Uses PowerShell and the official installer, then enters Tuzi setup instead of OpenAI onboarding | Passed by static review |
 | Windows cmd launcher | Delegates from `cmd.exe` to PowerShell and avoids Bash parsing | Passed by static review |
+| Windows installer cache bypass | CMD adds a random query parameter and `Cache-Control: no-cache`; PowerShell prints an installer version so stale scripts are visible | Passed by preflight and immutable GitHub raw-file verification |
 | Windows Tuzi providers | Writes `tuzi-claude-code` or `tuzi-codex`; GACCode writes both `gac-claude` and `gac-codex` | Passed by static review |
 | Windows configuration safety | Creates the config directory, backs up an existing config, writes via a temporary file, and keeps the API Key out of process arguments | Passed by static review |
 | Windows AI test and Gateway flow | Uses isolated `agent exec`, then offers service installation and startup | Passed by static review |
