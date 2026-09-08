@@ -57,7 +57,7 @@ curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/m
 5. **自动启动 OpenClaw 服务**
 6. 可选打开配置菜单进行详细配置（渠道等）
 
-> Windows 原生环境请在 PowerShell 运行本项目入口：`irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex`。它会设置 UTF-8、调用官方安装器并引导 onboarding。不要在 `cmd.exe` 或 Git Bash 中运行 `install.sh`；如需 Bash 流程，请使用 WSL2。
+> Windows 原生环境请在 PowerShell 运行本项目入口：`irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex`。它会设置 UTF-8、调用官方安装器并直接进入本项目的 Tuzi 配置，不再进入 OpenAI onboarding。不要在 `cmd.exe` 或 Git Bash 中运行 `install.sh`；如需 Bash 配置菜单，请使用 WSL2。
 
 #### Windows 原生安装
 
@@ -76,14 +76,23 @@ install-windows.cmd
 
 不要在 `cmd.exe` 中执行 `curl ... | bash`；`cmd.exe` 不支持 Bash，也无法正确处理该交互输入。
 
-已经安装 OpenClaw、需要跳过官方安装或 onboarding 时，先下载再带参数运行：
+已经安装 OpenClaw、只需要重新配置 Tuzi 时，先下载再带参数运行：
 
 ```powershell
 irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 -OutFile .\install-windows.ps1
-& .\install-windows.ps1 -SkipOfficialInstall -NoOnboard
+& .\install-windows.ps1 -SkipOfficialInstall
 ```
 
-Windows 下启动：`openclaw gateway start`；打开持续会话界面：`openclaw tui`。
+Windows 原生流程与 macOS/Linux 的核心结果保持一致：
+
+1. 选择 `Claude-Code`、`Codex` 或 `GACCode`
+2. 隐藏输入 API Key；Claude-Code/Codex 会实时拉取可见模型并支持多选
+3. 写入 `~/.openclaw/openclaw.json`；修改已有配置前自动生成带时间戳的备份
+4. GACCode 同时配置 `gac-claude` 和 `gac-codex`
+5. 可选执行隔离的 `openclaw agent exec` 测试，不写入 `session main`
+6. 可选安装 Gateway 系统服务并立即启动
+
+Windows 下启动：`openclaw gateway start`；打开持续会话界面：`openclaw tui`。Windows 原生脚本暂不包含 Bash 的完整渠道配置菜单；如需该菜单请使用 WSL2，或安装后使用 OpenClaw 官方渠道命令配置。
 
 ### 方式二：手动安装
 

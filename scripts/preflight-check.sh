@@ -22,9 +22,20 @@ done
 test -f install-windows.ps1 || fail "missing native Windows installer"
 test -f install-windows.cmd || fail "missing cmd.exe Windows launcher"
 rg -Fq -- "openclaw.ai/install.ps1" install-windows.ps1 || fail "Windows installer does not use official installer"
-rg -Fq -- "openclaw onboard" install-windows.ps1 || fail "Windows onboarding path is missing"
 rg -Fq -- "Do not run install.sh from cmd.exe or Git Bash" install-windows.ps1 || fail "Windows terminal guidance is missing"
 rg -Fq -- "Invoke-RestMethod" install-windows.cmd || fail "cmd.exe launcher does not delegate to PowerShell"
+require_text 'Configure-Tuzi' install-windows.ps1
+require_text 'https://api.tu-zi.com/v1/models' install-windows.ps1
+require_text "addProvider('gac-claude'" install-windows.ps1
+require_text "addProvider('gac-codex'" install-windows.ps1
+require_text 'openclaw agent exec' install-windows.ps1
+require_text '不写入 session main' install-windows.ps1
+require_text 'openclaw gateway install' install-windows.ps1
+require_text 'openclaw gateway start' install-windows.ps1
+require_text 'bak-' install-windows.ps1
+if rg -Fq -- '& openclaw onboard' install-windows.ps1; then
+    fail "Windows installer still launches the official provider onboarding"
+fi
 
 for forbidden in \
     'models.default' \

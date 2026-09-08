@@ -1,6 +1,6 @@
 # OpenClaw 2026.9.2 Compatibility QA
 
-Date: 2026-09-07
+Date: 2026-09-08
 
 ## Scope
 
@@ -8,7 +8,7 @@ Date: 2026-09-07
 - Official Gateway service lifecycle and update commands.
 - Isolated one-shot `agent exec` validation without writing to `session main`.
 - Docker authenticated startup configuration.
-- Native Windows PowerShell entry point with UTF-8 console setup.
+- Native Windows PowerShell entry point with UTF-8 console setup and first-party Tuzi configuration.
 - Native `cmd.exe` launcher delegating to PowerShell.
 - Tuzi/GAC provider writes, model selection, and Feishu setup path.
 - macOS Intel/Apple Silicon, Linux, root/no-sudo, and Windows/WSL2 branching.
@@ -29,8 +29,13 @@ Date: 2026-09-07
 | Node version boundary and platform branch checks | Reject unsupported Node 23/old minors and direct Windows to PowerShell/WSL2 | Passed |
 | Installer AI test command | Uses `openclaw agent exec` with temporary isolated state instead of a Gateway session | Passed by static review |
 | Architecture branch inspection | Recognize amd64/arm64 families and warn on unknown values | Passed by static review |
-| Windows native installer | Uses PowerShell, official installer, and onboarding without Bash prompts | Passed by static review |
+| Windows native installer | Uses PowerShell and the official installer, then enters Tuzi setup instead of OpenAI onboarding | Passed by static review |
 | Windows cmd launcher | Delegates from `cmd.exe` to PowerShell and avoids Bash parsing | Passed by static review |
+| Windows Tuzi providers | Writes `tuzi-claude-code` or `tuzi-codex`; GACCode writes both `gac-claude` and `gac-codex` | Passed by static review |
+| Windows configuration safety | Creates the config directory, backs up an existing config, writes via a temporary file, and keeps the API Key out of process arguments | Passed by static review |
+| Windows AI test and Gateway flow | Uses isolated `agent exec`, then offers service installation and startup | Passed by static review |
+| PowerShell parser | PowerShell 7.4 parses `install-windows.ps1` without syntax errors | Passed in a read-only Linux PowerShell container |
+| Windows embedded config writer | Fake-key writes produce the expected Claude-Code, Codex, and dual GAC providers | Passed in three isolated temporary directories |
 | New Node.js installation line | Installs Node.js 22 LTS on Homebrew/NodeSource while retaining supported newer existing versions | Passed by static review |
 | Linux stale Node path recovery | Selects a supported `/usr/bin/node` after package installation when nvm/asdf still resolves an older runtime | Passed by static review |
 
@@ -39,11 +44,12 @@ Date: 2026-09-07
 - A real installation/update was not run on the host, so no global npm package or user configuration was changed.
 - Gateway, Tuzi/GAC API, and Feishu wizard end-to-end tests require isolated credentials and a real OpenClaw runtime.
 - Docker `linux/arm64` image build was attempted but could not fetch the anonymous Docker Hub token before the network deadline; Dockerfile syntax and Compose rendering passed, but image build remains unverified. The default base is pinned to Node 22 LTS (`node:22-bookworm-slim`).
-- Native Windows, Linux distributions other than the current host, and both macOS CPU variants were not booted in this environment; those paths are covered by static branch checks only. Windows PowerShell input/rendering still needs validation on a Windows host.
+- Native Windows, Linux distributions other than the current host, and both macOS CPU variants were not booted in this environment; those paths are covered by static branch checks only. Windows PowerShell 5.1/CMD input, service installation, atomic replacement behavior, and full Tuzi/GAC calls still need validation on a Windows host.
 
 ## Residual Risk
 
 - Existing user JSON5 files with comments are not rewritten through OpenClaw CLI patch commands; the provider writers still require strict JSON parsing. A failed parse must be treated as a configuration error and corrected before rerunning.
+- The Windows native installer aligns the core install, Tuzi model, isolated test, and Gateway lifecycle. The full Bash channel configuration menu remains available only through WSL2.
 - OpenClaw commands are version-sensitive. The installer delegates normal installation and update behavior to the official CLI/installer, then performs local static checks.
 - A direct npm fallback install may not carry the package-manager ownership metadata required by `openclaw update`; the configuration menu now reports this case and points to reinstalling through the official installer.
 - Docker uses the official Debian slim multi-architecture Node base image, `tini`, and non-root `node` user; actual image pulls and native-module builds still need CI coverage on `linux/amd64` and `linux/arm64`.
