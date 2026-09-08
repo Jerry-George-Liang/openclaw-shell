@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.08.1'
+$InstallerVersion = '2026.09.08.2'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -402,9 +402,26 @@ function Test-TuziConnection([string]$ConfigPath, [string]$OpenClawPath) {
     Write-Host ''
     Write-Host '第 2 步: 测试 API 连接' -ForegroundColor Cyan
     Write-Host '使用隔离 openclaw agent exec 测试，不写入 session main。' -ForegroundColor DarkGray
-    & $OpenClawPath agent exec --config $ConfigPath --timeout 25 '回复 OK'
-    if ($LASTEXITCODE -eq 0) {
+    $agentOutput = @()
+    & $OpenClawPath agent exec --config $ConfigPath --timeout 25 '回复 OK' 2>&1 |
+        ForEach-Object {
+            $agentOutput += $_
+            Write-Host $_
+        }
+    $agentExitCode = $LASTEXITCODE
+    $agentText = @($agentOutput | ForEach-Object { $_.ToString() }) -join "`n"
+    $windowsCleanupOnly = (
+        $agentExitCode -ne 0 -and
+        $agentText -match '(?i)provider-transport-fetch.*response.*status=200' -and
+        $agentText -match '(?i)stopReason=stop' -and
+        $agentText -match '(?i)Agent exec cleanup failed:.*EBUSY' -and
+        $agentText -match '(?i)openclaw-agent-exec.*openclaw\.sqlite'
+    )
+    if ($agentExitCode -eq 0) {
         Write-Host 'OpenClaw AI 测试成功。' -ForegroundColor Green
+    } elseif ($windowsCleanupOnly) {
+        Write-Host '[WARN] AI 请求已成功，但 Windows 临时状态文件被进程占用，清理会稍后完成。' -ForegroundColor Yellow
+        Write-Host '本次结果按连接成功处理；不会删除或修改你的主会话数据。' -ForegroundColor DarkGray
     } else {
         Write-Host '[WARN] AI 测试失败，但已保存的配置未删除。上游过载时可稍后重试。' -ForegroundColor Yellow
         Write-Host "重试命令: openclaw agent exec --config `"$ConfigPath`" --timeout 25 '回复 OK'" -ForegroundColor DarkGray

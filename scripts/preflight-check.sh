@@ -33,6 +33,10 @@ require_text "addProvider('gac-claude'" install-windows.ps1
 require_text "addProvider('gac-codex'" install-windows.ps1
 require_text 'openclaw agent exec' install-windows.ps1
 require_text '不写入 session main' install-windows.ps1
+require_text 'windowsCleanupOnly' install-windows.ps1
+require_text 'provider-transport-fetch.*response.*status=200' install-windows.ps1
+require_text 'Agent exec cleanup failed:.*EBUSY' install-windows.ps1
+require_text '本次结果按连接成功处理' install-windows.ps1
 require_text 'openclaw gateway install' install-windows.ps1
 require_text 'openclaw gateway start' install-windows.ps1
 require_text 'openclaw gateway status --deep' install-windows.ps1
