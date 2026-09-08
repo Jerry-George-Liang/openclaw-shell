@@ -397,9 +397,13 @@ if (-not $SkipOfficialInstall) {
             }
     } catch {
         $officialText = @($officialOutput | ForEach-Object { $_.ToString() }) -join "`n"
+        $gatewayOwnershipFailure = (
+            $officialText -match 'SERVICE_DEFINITION_UNKNOWN' -or
+            $officialText -match '(?i)Gateway service ownership or shutdown could not be verified'
+        )
         $knownGatewayMigrationFailure = (
             $officialText -match '(?i)OpenClaw installed' -and
-            $officialText -match 'SERVICE_DEFINITION_UNKNOWN' -and
+            $gatewayOwnershipFailure -and
             $officialText -match '(?i)Migration failed'
         )
         if (-not $knownGatewayMigrationFailure) {

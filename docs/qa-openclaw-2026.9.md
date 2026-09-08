@@ -34,7 +34,7 @@ Date: 2026-09-08
 | Windows Tuzi providers | Writes `tuzi-claude-code` or `tuzi-codex`; GACCode writes both `gac-claude` and `gac-codex` | Passed by static review |
 | Windows configuration safety | Creates the config directory, backs up an existing config, writes via a temporary file, and keeps the API Key out of process arguments | Passed by static review |
 | Windows AI test and Gateway flow | Uses isolated `agent exec`, then offers service installation and startup | Passed by static review |
-| Windows failed post-install migration | Captures child stderr and host information, then continues only for the exact installed + `SERVICE_DEFINITION_UNKNOWN` + migration-failed signature and a usable `openclaw --version`; skips automatic Gateway mutation | Passed by static review and mixed-stream simulation |
+| Windows failed post-install migration | Captures child stderr and host information, then continues only for installed + migration-failed + either `SERVICE_DEFINITION_UNKNOWN` or the official ownership/shutdown error, with a usable `openclaw --version`; skips automatic Gateway mutation | Passed by static review and mixed-stream simulation |
 | PowerShell parser | PowerShell 7.4 parses `install-windows.ps1` without syntax errors | Passed in a read-only Linux PowerShell container |
 | Windows embedded config writer | Fake-key writes produce the expected Claude-Code, Codex, and dual GAC providers | Passed in three isolated temporary directories |
 | New Node.js installation line | Installs Node.js 22 LTS on Homebrew/NodeSource while retaining supported newer existing versions | Passed by static review |

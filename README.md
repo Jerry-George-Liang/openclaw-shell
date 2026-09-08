@@ -94,7 +94,7 @@ Windows 原生流程与 macOS/Linux 的核心结果保持一致：
 
 Windows 下启动：`openclaw gateway start`；打开持续会话界面：`openclaw tui`。Windows 原生脚本暂不包含 Bash 的完整渠道配置菜单；如需该菜单请使用 WSL2，或安装后使用 OpenClaw 官方渠道命令配置。
 
-如果升级已有安装时出现 `SERVICE_DEFINITION_UNKNOWN`，表示官方安装器无法安全确认旧 Gateway 服务由谁创建。新版包装脚本会在确认 `openclaw` 命令可用后继续完成 Tuzi 配置，但不会强制覆盖、停止或重启归属不明的服务。请先运行：
+如果升级已有安装时出现 `SERVICE_DEFINITION_UNKNOWN`，或提示 `Gateway service ownership or shutdown could not be verified`，表示官方安装器无法安全确认旧 Gateway 服务由谁创建。新版包装脚本会在确认 `openclaw` 命令可用后继续完成 Tuzi 配置，但不会强制覆盖、停止或重启归属不明的服务。请先运行：
 
 ```powershell
 openclaw gateway status --deep
