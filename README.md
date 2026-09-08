@@ -92,6 +92,8 @@ Windows 原生流程与 macOS/Linux 的核心结果保持一致：
 5. 可选执行隔离的 `openclaw agent exec` 测试，不写入 `session main`
 6. 可选安装 Gateway 系统服务并立即启动
 
+如果 Windows PowerShell 获取模型列表时出现 TLS/连接关闭错误，脚本会自动改用已安装的 Node.js 兼容通道重试；两条通道都不可用时才提示手动输入模型名称。
+
 Windows 下启动：`openclaw gateway start`；打开持续会话界面：`openclaw tui`。Windows 原生脚本暂不包含 Bash 的完整渠道配置菜单；如需该菜单请使用 WSL2，或安装后使用 OpenClaw 官方渠道命令配置。
 
 如果升级已有安装时出现 `SERVICE_DEFINITION_UNKNOWN`，或提示 `Gateway service ownership or shutdown could not be verified`，表示官方安装器无法安全确认旧 Gateway 服务由谁创建。新版包装脚本会在确认 `openclaw` 命令可用后继续完成 Tuzi 配置，但不会强制覆盖、停止或重启归属不明的服务。请先运行：

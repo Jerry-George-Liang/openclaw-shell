@@ -30,6 +30,10 @@ require_text "Installer version: \$InstallerVersion" install-windows.ps1
 require_text 'install-windows.ps1?cachebust=' install-windows.ps1
 require_text 'Configure-Tuzi' install-windows.ps1
 require_text 'https://api.tu-zi.com/v1/models' install-windows.ps1
+require_text 'Get-TuziModelsViaNode' install-windows.ps1
+require_text 'OPENCLAW_TUZI_KEY' install-windows.ps1
+require_text 'PowerShell 获取 Tuzi 模型列表失败，改用 Node.js 网络兼容通道重试' install-windows.ps1
+require_text '已通过 Node.js 兼容通道获取' install-windows.ps1
 require_text "addProvider('gac-claude'" install-windows.ps1
 require_text "addProvider('gac-codex'" install-windows.ps1
 require_text 'openclaw agent exec' install-windows.ps1

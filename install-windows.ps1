@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.08.4'
+$InstallerVersion = '2026.09.08.5'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -109,31 +109,83 @@ function Read-ApiKey([string]$Prompt) {
     }
 }
 
+function Get-TuziModelIds($Response) {
+    $items = if ($null -ne $Response.data) { $Response.data } else { $Response }
+    return @(
+        $items |
+            ForEach-Object { $_.id } |
+            Where-Object { $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $_.Trim() } |
+            Select-Object -Unique
+    )
+}
+
+function Get-TuziModelsViaNode([string]$ApiKey) {
+    $nodeScript = @'
+const https = require('https');
+const request = https.request('https://api.tu-zi.com/v1/models', {
+  method: 'GET',
+  headers: { Authorization: `Bearer ${process.env.OPENCLAW_TUZI_KEY}`, Accept: 'application/json' }
+}, (response) => {
+  let body = '';
+  response.setEncoding('utf8');
+  response.on('data', (chunk) => { body += chunk; });
+  response.on('end', () => process.stdout.write(JSON.stringify({ status: response.statusCode, body })));
+});
+request.setTimeout(30000, () => request.destroy(new Error('request timeout')));
+request.on('error', (error) => { console.error(error.message); process.exitCode = 1; });
+    request.end();
+'@
+    $previousKey = $env:OPENCLAW_TUZI_KEY
+    $previousErrorActionPreference = $ErrorActionPreference
+    $raw = @()
+    $exitCode = 1
+    try {
+        $env:OPENCLAW_TUZI_KEY = $ApiKey
+        $ErrorActionPreference = 'Continue'
+        $raw = @(& node -e $nodeScript 2>&1)
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($null -eq $previousKey) {
+            Remove-Item Env:OPENCLAW_TUZI_KEY -ErrorAction SilentlyContinue
+        } else {
+            $env:OPENCLAW_TUZI_KEY = $previousKey
+        }
+    }
+    if ($exitCode -ne 0 -or $raw.Count -eq 0) { return @() }
+    try {
+        $envelope = (($raw | ForEach-Object { $_.ToString() }) -join "`n") | ConvertFrom-Json
+        if ([int]$envelope.status -lt 200 -or [int]$envelope.status -ge 300) { return @() }
+        return @(Get-TuziModelIds (($envelope.body | ConvertFrom-Json)))
+    } catch {
+        return @()
+    }
+}
+
 function Get-TuziModels([string]$ApiKey) {
+    $powershellError = $null
     try {
         $response = Invoke-RestMethod -Uri 'https://api.tu-zi.com/v1/models' `
             -Headers @{ Authorization = "Bearer $ApiKey" } -TimeoutSec 30
-        $items = if ($null -ne $response.data) { $response.data } else { $response }
-        $models = @(
-            $items |
-                ForEach-Object { $_.id } |
-                Where-Object { $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_) } |
-                ForEach-Object { $_.Trim() } |
-                Select-Object -Unique
-        )
+        $models = @(Get-TuziModelIds $response)
         if ($models.Count -gt 0) {
             Write-Host "已从 Tuzi 接口获取 $($models.Count) 个模型。" -ForegroundColor Green
             return $models
         }
-        Write-Host '[WARN] 当前 Key 没有返回可见模型，将改为手动输入。' -ForegroundColor Yellow
     } catch {
-        $status = $null
-        if ($null -ne $_.Exception.Response) {
-            try { $status = [int]$_.Exception.Response.StatusCode } catch {}
-        }
-        $detail = if ($null -ne $status) { "HTTP $status" } else { $_.Exception.Message }
-        Write-Host "[WARN] Tuzi 模型列表获取失败 ($detail)，将改为手动输入。" -ForegroundColor Yellow
+        $powershellError = $_.Exception.Message
     }
+
+    Write-Host '[WARN] PowerShell 获取 Tuzi 模型列表失败，改用 Node.js 网络兼容通道重试。' -ForegroundColor Yellow
+    $models = @(Get-TuziModelsViaNode $ApiKey)
+    if ($models.Count -gt 0) {
+        Write-Host "已通过 Node.js 兼容通道获取 $($models.Count) 个模型。" -ForegroundColor Green
+        return $models
+    }
+
+    $detail = if ([string]::IsNullOrWhiteSpace($powershellError)) { 'Node.js 请求也未返回可用模型' } else { $powershellError }
+    Write-Host "[WARN] Tuzi 模型列表获取失败 ($detail)，将改为手动输入。" -ForegroundColor Yellow
     return @()
 }
 
