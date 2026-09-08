@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.08.9'
+$InstallerVersion = '2026.09.08.10'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -531,6 +531,16 @@ function Test-TuziConnection([string]$ConfigPath, [string]$OpenClawPath) {
 }
 
 function Invoke-OpenClawStateRepair([string]$OpenClawPath) {
+    $powerShellCommand = Get-Command 'powershell.exe' -ErrorAction SilentlyContinue
+    if ($null -eq $powerShellCommand -or [string]::IsNullOrWhiteSpace($powerShellCommand.Source)) {
+        Write-Host '[WARN] 找不到 powershell.exe，无法在独立 shell 中运行 OpenClaw Doctor。' -ForegroundColor Yellow
+        Write-Host '请打开 Windows PowerShell 后手动运行: openclaw doctor --fix' -ForegroundColor Cyan
+        return $false
+    }
+
+    # OpenClaw 官方 Doctor 需要独立 shell 才能可靠判断 Windows Gateway 的服务归属。
+    $escapedOpenClawPath = $OpenClawPath.Replace("'", "''")
+    $isolatedCommand = "& '$escapedOpenClawPath' doctor --fix"
     for ($attempt = 1; $attempt -le 2; $attempt++) {
         Write-Host ''
         Write-Host "运行 OpenClaw 状态修复 (第 $attempt 次)..." -ForegroundColor Cyan
@@ -540,7 +550,8 @@ function Invoke-OpenClawStateRepair([string]$OpenClawPath) {
         try {
             # Windows PowerShell 5.1 can surface native stderr as a terminating record.
             $ErrorActionPreference = 'Continue'
-            & $OpenClawPath doctor --fix 2>&1 |
+            # The child inherits this console, so Doctor prompts remain interactive.
+            & $powerShellCommand.Source -NoLogo -NoProfile -ExecutionPolicy Bypass -Command $isolatedCommand 2>&1 |
                 ForEach-Object {
                     $line = $_.ToString()
                     $repairOutput += $line
@@ -567,6 +578,10 @@ function Invoke-OpenClawStateRepair([string]$OpenClawPath) {
         }
 
         Write-Host '[WARN] OpenClaw 状态迁移仍未完成，保留现有配置和 legacy 备份目录。' -ForegroundColor Yellow
+        if ($repairText -match '(?i)Gateway service ownership or shutdown could not be verified|SERVICE_DEFINITION_UNKNOWN') {
+            Write-Host '[WARN] 独立 PowerShell 仍无法确认 Gateway 服务归属或停止状态。' -ForegroundColor Yellow
+            Write-Host '请关闭其他 OpenClaw/TUI/Gateway 窗口后，再在新的 PowerShell 中运行: openclaw doctor --fix' -ForegroundColor Cyan
+        }
         return $false
     }
     return $false
