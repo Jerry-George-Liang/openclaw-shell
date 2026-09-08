@@ -36,6 +36,7 @@ Date: 2026-09-08
 | Windows configuration safety | Creates the config directory, backs up an existing config, writes via a temporary file, and keeps the API Key out of process arguments | Passed by static review |
 | Windows AI test and Gateway flow | Uses isolated `agent exec`, then offers service installation and startup | Passed by static review |
 | Windows AI test cleanup lock | Treats a `status=200` + `stopReason=stop` run with only `EBUSY` temporary SQLite cleanup failure as a successful request with delayed cleanup; other failures remain warnings | Passed by static review; Windows runtime pending |
+| Windows PowerShell 5.1 native stderr | Temporarily captures `agent exec` stderr under `Continue`, converts records to text, and restores the installer's stop-on-error policy in `finally` | Passed by parser and pipeline simulation; Windows PowerShell 5.1 runtime pending |
 | Windows failed post-install migration | Captures child stderr and host information, then continues only for installed + migration-failed + either `SERVICE_DEFINITION_UNKNOWN` or the official ownership/shutdown error; skips automatic Gateway mutation | Passed by static review and mixed-stream simulation |
 | Windows post-install PATH refresh | Searches the current command, npm prefix, `%APPDATA%\npm`, and `%USERPROFILE%\.local\bin`; Tuzi JSON configuration continues when the new shim needs a fresh terminal | Passed by static review |
 | PowerShell parser | PowerShell 7.4 parses `install-windows.ps1` without syntax errors | Passed in a read-only Linux PowerShell container |

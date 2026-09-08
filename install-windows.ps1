@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.08.2'
+$InstallerVersion = '2026.09.08.3'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -403,13 +403,22 @@ function Test-TuziConnection([string]$ConfigPath, [string]$OpenClawPath) {
     Write-Host '第 2 步: 测试 API 连接' -ForegroundColor Cyan
     Write-Host '使用隔离 openclaw agent exec 测试，不写入 session main。' -ForegroundColor DarkGray
     $agentOutput = @()
-    & $OpenClawPath agent exec --config $ConfigPath --timeout 25 '回复 OK' 2>&1 |
-        ForEach-Object {
-            $agentOutput += $_
-            Write-Host $_
-        }
-    $agentExitCode = $LASTEXITCODE
-    $agentText = @($agentOutput | ForEach-Object { $_.ToString() }) -join "`n"
+    $agentExitCode = 1
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 wraps native stderr as NativeCommandError.
+        $ErrorActionPreference = 'Continue'
+        & $OpenClawPath agent exec --config $ConfigPath --timeout 25 '回复 OK' 2>&1 |
+            ForEach-Object {
+                $line = $_.ToString()
+                $agentOutput += $line
+                Write-Host $line
+            }
+        $agentExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    $agentText = $agentOutput -join "`n"
     $windowsCleanupOnly = (
         $agentExitCode -ne 0 -and
         $agentText -match '(?i)provider-transport-fetch.*response.*status=200' -and

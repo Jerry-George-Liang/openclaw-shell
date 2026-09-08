@@ -37,6 +37,9 @@ require_text 'windowsCleanupOnly' install-windows.ps1
 require_text 'provider-transport-fetch.*response.*status=200' install-windows.ps1
 require_text 'Agent exec cleanup failed:.*EBUSY' install-windows.ps1
 require_text '本次结果按连接成功处理' install-windows.ps1
+require_text "\$ErrorActionPreference = 'Continue'" install-windows.ps1
+require_text '$ErrorActionPreference = $previousErrorActionPreference' install-windows.ps1
+require_text 'NativeCommandError' install-windows.ps1
 require_text 'openclaw gateway install' install-windows.ps1
 require_text 'openclaw gateway start' install-windows.ps1
 require_text 'openclaw gateway status --deep' install-windows.ps1
