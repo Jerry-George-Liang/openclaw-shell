@@ -390,7 +390,7 @@ if (-not $SkipOfficialInstall) {
     $official = Invoke-RestMethod -Uri 'https://openclaw.ai/install.ps1'
     $officialOutput = @()
     try {
-        & ([scriptblock]::Create([string]$official)) -NoOnboard 6>&1 |
+        & ([scriptblock]::Create([string]$official)) -NoOnboard 2>&1 6>&1 |
             ForEach-Object {
                 $officialOutput += $_
                 Write-Host $_

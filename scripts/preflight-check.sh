@@ -37,6 +37,7 @@ require_text '官方安装器的安装后迁移未完成' install-windows.ps1
 require_text "Get-Command 'openclaw'" install-windows.ps1
 require_text 'SERVICE_DEFINITION_UNKNOWN' install-windows.ps1
 require_text 'knownGatewayMigrationFailure' install-windows.ps1
+require_text '-NoOnboard 2>&1 6>&1' install-windows.ps1
 require_text 'Setup-Gateway $officialInstallerWarning' install-windows.ps1
 require_text 'bak-' install-windows.ps1
 if rg -Fq -- '& openclaw onboard' install-windows.ps1; then
