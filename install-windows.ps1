@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.08.3'
+$InstallerVersion = '2026.09.08.4'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -545,5 +545,5 @@ if ($officialInstallerWarning) {
 }
 Write-Host 'Start the Gateway: openclaw gateway start'
 Write-Host 'Open the terminal UI: openclaw tui'
-Write-Host 'Configure Tuzi again: irm https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1 | iex'
+Write-Host "Configure Tuzi again: `$u='https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust='+[guid]::NewGuid().ToString('N'); irm `$u | iex"
 Write-Host 'Configure another provider manually: openclaw onboard'

@@ -27,6 +27,7 @@ rg -Fq -- "Invoke-RestMethod" install-windows.cmd || fail "cmd.exe launcher does
 require_text "[Guid]::NewGuid().ToString('N')" install-windows.cmd
 require_text "'Cache-Control'='no-cache'" install-windows.cmd
 require_text "Installer version: \$InstallerVersion" install-windows.ps1
+require_text 'install-windows.ps1?cachebust=' install-windows.ps1
 require_text 'Configure-Tuzi' install-windows.ps1
 require_text 'https://api.tu-zi.com/v1/models' install-windows.ps1
 require_text "addProvider('gac-claude'" install-windows.ps1
