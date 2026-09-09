@@ -6,7 +6,7 @@
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.09.7'
+$InstallerVersion = '2026.09.09.8'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -702,11 +702,11 @@ function Get-MissingGatewayLauncherEvidence([string]$OpenClawPath) {
             }
         ) -join ' '
     }
-    if ([string]::IsNullOrWhiteSpace($taskActionText) -and $null -ne (Get-Command 'schtasks.exe' -ErrorAction SilentlyContinue)) {
+    if ($null -ne (Get-Command 'schtasks.exe' -ErrorAction SilentlyContinue)) {
         try {
             $taskQuery = @(& schtasks.exe /Query /TN 'OpenClaw Gateway' /FO LIST /V 2>$null)
             if ($LASTEXITCODE -eq 0) {
-                $taskActionText = ($taskQuery | ForEach-Object { $_.ToString() }) -join ' '
+                $taskActionText = (($taskActionText, (($taskQuery | ForEach-Object { $_.ToString() }) -join ' ')) | Where-Object { $_ }) -join ' '
             }
         } catch {}
     }
@@ -744,6 +744,50 @@ function Get-MissingGatewayLauncherEvidence([string]$OpenClawPath) {
     }
 }
 
+function Repair-MissingGatewayTask([string]$OpenClawPath, $Evidence) {
+    $schtasksCommand = Get-Command 'schtasks.exe' -ErrorAction SilentlyContinue
+    if ($null -eq $schtasksCommand) {
+        Write-Host '[WARN] 找不到 schtasks.exe，无法安全备份和删除残缺计划任务。' -ForegroundColor Yellow
+        return $false
+    }
+
+    $backupPath = Join-Path (Join-Path $HOME '.openclaw') ('gateway-task-backup-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff') + '.xml')
+    try {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $backupPath) -Force | Out-Null
+        $taskXml = @(& $schtasksCommand.Source /Query /TN $Evidence.TaskName /XML 2>&1)
+        if ($LASTEXITCODE -ne 0 -or $taskXml.Count -eq 0) {
+            Write-Host '[WARN] 无法导出残缺计划任务 XML，已停止，不删除任务。' -ForegroundColor Yellow
+            return $false
+        }
+        $taskXml | Out-File -LiteralPath $backupPath -Encoding utf8 -Force
+        Write-Host "已备份残缺计划任务: $backupPath" -ForegroundColor DarkGray
+    } catch {
+        Write-Host '[WARN] 备份残缺计划任务失败，已停止，不删除任务。' -ForegroundColor Yellow
+        return $false
+    }
+
+    if (-not (Confirm-Choice '该任务启动器已确认丢失。是否删除此残缺任务并由官方命令重建？' $true)) {
+        Write-Host '已跳过残缺任务删除，保留现有计划任务和配置。' -ForegroundColor Yellow
+        return $false
+    }
+
+    & $schtasksCommand.Source /Delete /TN $Evidence.TaskName /F 2>&1 | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host '[WARN] 删除残缺计划任务失败，保留任务 XML 备份。' -ForegroundColor Yellow
+        return $false
+    }
+
+    & $OpenClawPath gateway install --force 2>&1 | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $Evidence.GatewayCmdPath -PathType Leaf)) {
+        Write-Host '已删除残缺任务并由官方命令重建 Gateway 启动器。' -ForegroundColor Green
+        return $true
+    }
+
+    Write-Host '[WARN] 官方 Gateway 重建未完成；任务 XML 备份已保留。' -ForegroundColor Yellow
+    Write-Host "如需恢复旧任务，可参考备份: $backupPath" -ForegroundColor Cyan
+    return $false
+}
+
 function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath, [bool]$ForceReinstall = $false) {
     Write-Host ''
     Write-Host '第 3 步: 配置 Gateway' -ForegroundColor Cyan
@@ -752,22 +796,11 @@ function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath,
         $missingLauncherEvidence = Get-MissingGatewayLauncherEvidence $OpenClawPath
         if ($null -ne $missingLauncherEvidence) {
             Write-Host '[WARN] 检测到 OpenClaw Gateway 计划任务仍存在，但其 gateway.cmd 启动器已缺失。' -ForegroundColor Yellow
-            Write-Host 'Gateway 当前已停止；将使用官方命令重新生成当前账号的服务启动器。' -ForegroundColor Yellow
-            if (Confirm-Choice '是否执行 openclaw gateway install --force 重建 Gateway？' $true) {
-                & $OpenClawPath gateway install --force
-                if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $missingLauncherEvidence.GatewayCmdPath -PathType Leaf)) {
-                    Write-Host 'Gateway 启动器已由官方命令重建。' -ForegroundColor Green
-                    $NeedsManualRepair = $false
-                    $launcherRepaired = $true
-                } else {
-                    Write-Host '[WARN] 官方 Gateway 重建未完成，保留现有计划任务和配置。' -ForegroundColor Yellow
-                    Write-Host '请在新的 PowerShell 中运行: openclaw gateway install --force' -ForegroundColor Cyan
-                    return
-                }
-            } else {
-                Write-Host '已跳过 Gateway 重建，保留现有计划任务和配置。' -ForegroundColor Yellow
-                return
-            }
+            Write-Host 'Gateway 当前已停止；官方 --force 可能因残缺任务定义拒绝，需要先备份并删除该残缺任务。' -ForegroundColor Yellow
+            if (Repair-MissingGatewayTask $OpenClawPath $missingLauncherEvidence) {
+                $NeedsManualRepair = $false
+                $launcherRepaired = $true
+            } else { return }
         }
     }
     if ($NeedsManualRepair) {

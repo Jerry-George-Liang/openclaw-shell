@@ -24,6 +24,9 @@ rg -Fq -- '$launcherRepaired' "$script" || fail "missing duplicate-install guard
 rg -Fq -- "Get-Command 'schtasks.exe'" "$script" || fail "missing schtasks fallback"
 rg -Fq -- "schtasks.exe /Query /TN 'OpenClaw Gateway' /FO LIST /V" "$script" || fail "missing task action fallback"
 rg -Fq -- '$runtimeNode = $status.service.runtime' "$script" || fail "missing nested runtime status compatibility"
+rg -Fq -- 'Repair-MissingGatewayTask' "$script" || fail "missing broken-task repair path"
+rg -Fq -- 'gateway-task-backup-' "$script" || fail "missing scheduled-task XML backup"
+rg -Fq -- '/Delete /TN $Evidence.TaskName /F' "$script" || fail "missing explicit task deletion guard"
 
 launcher="$repo_root/install-windows.cmd"
 rg -Fq -- 'curl.exe --fail --silent --show-error --location --retry 3' "$launcher" || fail "CMD launcher does not use curl retry path"
