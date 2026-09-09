@@ -22,6 +22,12 @@ rg -Fq -- 'gateway install --force' "$script" || fail "missing official launcher
 rg -Fq -- 'gateway\.(?:cmd|vbs)' "$script" || fail "missing vbs task-wrapper compatibility"
 rg -Fq -- '$launcherRepaired' "$script" || fail "missing duplicate-install guard"
 
+launcher="$repo_root/install-windows.cmd"
+rg -Fq -- 'curl.exe --fail --silent --show-error --location --retry 3' "$launcher" || fail "CMD launcher does not use curl retry path"
+rg -Fq -- '--connect-timeout 15 --max-time 120' "$launcher" || fail "CMD launcher timeout is missing"
+rg -Fq -- 'Invoke-RestMethod -Uri' "$launcher" || fail "CMD launcher lost PowerShell fallback"
+rg -Fq -- 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%OPENCLAW_INSTALLER_PATH%" %*' "$launcher" || fail "CMD launcher does not preserve arguments"
+
 simulated_output=$'Gateway service ownership or shutdown could not be verified.\nSERVICE_DEFINITION_UNKNOWN'
 if ! printf '%s\n' "$simulated_output" | rg -q '(Gateway service ownership or shutdown could not be verified|SERVICE_DEFINITION_UNKNOWN)'; then
     fail "ownership failure sample was not recognized"

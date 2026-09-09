@@ -39,12 +39,16 @@ ps1_bom="$(od -An -tx1 -N3 install-windows.ps1 | tr -d '[:space:]')"
 rg -Fq -- "openclaw.ai/install.ps1" install-windows.ps1 || fail "Windows installer does not use official installer"
 rg -Fq -- "Do not run install.sh from cmd.exe or Git Bash" install-windows.ps1 || fail "Windows terminal guidance is missing"
 rg -Fq -- "Invoke-RestMethod" install-windows.cmd || fail "cmd.exe launcher does not delegate to PowerShell"
-require_text 'OPENCLAW_INSTALLER_ARGUMENTS=%*' install-windows.cmd
-require_text '@installerArguments' install-windows.cmd
-require_text "[Guid]::NewGuid().ToString('N')" install-windows.cmd
+require_text 'OPENCLAW_INSTALLER_PATH=%TEMP%\openclaw-installer-' install-windows.cmd
+require_text 'OPENCLAW_INSTALLER_URL=https://raw.githubusercontent.com' install-windows.cmd
+require_text 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%OPENCLAW_INSTALLER_PATH%" %*' install-windows.cmd
+require_text 'cachebust=%RANDOM%%RANDOM%' install-windows.cmd
 require_text "'Cache-Control'='no-cache'" install-windows.cmd
 require_text "Installer version: \$InstallerVersion" install-windows.ps1
-require_text '2026.09.09.4' install-windows.ps1
+require_text '2026.09.09.5' install-windows.ps1
+require_text 'curl.exe --fail --silent --show-error --location --retry 3' install-windows.cmd
+require_text '--connect-timeout 15 --max-time 120' install-windows.cmd
+require_text 'Invoke-RestMethod -Uri' install-windows.cmd
 require_text '[switch]$CheckOnly' install-windows.ps1
 require_text 'Test-WindowsEnvironment' install-windows.ps1
 require_text 'Windows 11 detected' install-windows.ps1

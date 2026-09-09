@@ -6,7 +6,7 @@
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.09.4'
+$InstallerVersion = '2026.09.09.5'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}

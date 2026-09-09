@@ -57,15 +57,17 @@ curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/m
 5. **自动启动 OpenClaw 服务**
 6. 可选打开配置菜单进行详细配置（渠道等）
 
-> Windows 原生环境请在 PowerShell 运行本项目入口：`$u='https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust='+[guid]::NewGuid().ToString('N'); irm $u | iex`。动态参数用于避免 GitHub CDN 或本地缓存返回旧脚本。它会设置 UTF-8、调用官方安装器并直接进入本项目的 Tuzi 配置，不再进入 OpenAI onboarding。不要在 `cmd.exe` 或 Git Bash 中运行 `install.sh`；如需 Bash 配置菜单，请使用 WSL2。
+> Windows 原生环境请在 PowerShell 使用下方的 `curl.exe` 下载命令。它会设置 UTF-8、调用官方安装器并直接进入本项目的 Tuzi 配置，不再进入 OpenAI onboarding。不要在 `cmd.exe` 或 Git Bash 中运行 `install.sh`；如需 Bash 配置菜单，请使用 WSL2。
 
 #### Windows 原生安装
 
-在 Windows PowerShell 5.1+ 或 PowerShell 7 中执行：
+在 Windows PowerShell 5.1+ 或 PowerShell 7 中执行。推荐使用 `curl.exe` 下载到临时文件后运行，避免部分 PowerShell 5.1 环境的 `Invoke-RestMethod` 出现“基础连接已经关闭”：
 
 ```powershell
-$u='https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust='+[guid]::NewGuid().ToString('N'); irm $u | iex
+$p=Join-Path $env:TEMP ('openclaw-installer-'+[guid]::NewGuid().ToString('N')+'.ps1'); $u='https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust='+[guid]::NewGuid().ToString('N'); curl.exe --fail --silent --show-error --location --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 15 --max-time 120 -H 'Cache-Control: no-cache' -o $p $u; if($LASTEXITCODE -ne 0){Remove-Item $p -Force -ErrorAction SilentlyContinue; throw '下载 Windows 安装脚本失败，请检查网络、代理或安全软件拦截'}; & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $p; $c=$LASTEXITCODE; Remove-Item $p -Force -ErrorAction SilentlyContinue; exit $c
 ```
+
+如果必须使用 `irm`，请先执行 `[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12`；但遇到“基础连接已经关闭”时，直接改用上面的 `curl.exe` 命令。CMD 用户直接运行仓库中的 `install-windows.cmd` 即可，启动器会自动优先使用 `curl.exe` 并在失败时回退到 PowerShell HTTP 客户端。
 
 从仓库运行前可先做 Win11 环境预检；它只检查 Windows 版本、CPU 架构和 PowerShell 版本，不安装软件、不修改 OpenClaw 配置。脚本文件带 UTF-8 BOM，可直接在 Windows PowerShell 5.1 本地执行，避免中文提示按系统 ANSI 解码：
 

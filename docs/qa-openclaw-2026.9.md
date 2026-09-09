@@ -50,6 +50,7 @@ Date: 2026-09-09
 | Windows skip-install behavior | `-SkipOfficialInstall` fails instead of reporting success when no runnable OpenClaw command exists | Passed by static review; Windows runtime pending |
 | Windows post-write validation | Runs the installed CLI config validator and restores the timestamped backup (or removes a new invalid config) on failure | Passed by static review; Windows runtime pending |
 | Windows CMD argument forwarding | CMD forwards switch arguments such as `-CheckOnly` to the downloaded PowerShell installer without evaluating them as commands | Passed by static review; Windows runtime pending |
+| Windows bootstrap download fallback | CMD downloads the PowerShell installer with Windows `curl.exe` retries/timeouts and falls back to `Invoke-RestMethod` only when curl fails, avoiding a hard dependency on the PowerShell 5.1 HTTP client | Passed by static review; Windows runtime pending |
 | WSL2 service fallback | Detects WSL2 without systemd, skips unsupported service installation/start and points to foreground `gateway run` | Passed by static review; WSL2 runtime pending |
 | PowerShell parser | PowerShell 7.4 parses `install-windows.ps1` without syntax errors | Passed in a read-only Linux PowerShell container |
 | Windows embedded config writer | Fake-key writes produce the expected Claude-Code, Codex, and dual GAC providers | Passed in three isolated temporary directories |
