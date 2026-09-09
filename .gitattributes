@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Windows Git commonly enables core.autocrlf. Container entrypoints must keep
+# an LF shebang or Docker will try to execute "/bin/bash\r".
+*.sh text eol=lf
+Dockerfile text eol=lf
