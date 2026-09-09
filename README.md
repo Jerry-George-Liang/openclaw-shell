@@ -126,7 +126,7 @@ openclaw gateway status --deep
 
 在服务归属处理完成前，不要重复运行 `openclaw gateway start`。如需先临时使用，可在一个 PowerShell 窗口运行 `openclaw gateway run` 并保持窗口打开，再在另一个窗口运行 `openclaw tui`。
 
-新版 Windows 脚本遇到 `agent.legacy-*` 状态迁移备份时，会在独立的 Windows PowerShell 进程中自动再次运行一次 `openclaw doctor --fix`；修复成功后通过官方 `openclaw gateway install --force` 重建当前账号的计划任务。旧目录始终保留，不会被脚本删除。若独立进程仍无法确认服务归属，请关闭其他 OpenClaw/TUI/Gateway 窗口后，在新的 PowerShell 中重试 Doctor。
+新版 Windows 脚本遇到 `agent.legacy-*` 状态迁移备份时，会在独立的 Windows PowerShell 进程中自动再次运行一次 `openclaw doctor --fix`。如果检测到 `OpenClaw Gateway` 计划任务的动作仍指向状态目录中的 `gateway.cmd` 或官方 `gateway.vbs`，但 `gateway.cmd` 已缺失，且 Gateway 已明确停止，脚本会提示使用官方 `openclaw gateway install --force` 重建启动器，并验证文件重新生成；证据不完整或重建失败时保留现有计划任务和配置。旧目录始终保留，不会被脚本删除。若独立进程仍无法确认服务归属，请关闭其他 OpenClaw/TUI/Gateway 窗口后，在新的 PowerShell 中重试 Doctor。
 
 ### 方式二：手动安装
 

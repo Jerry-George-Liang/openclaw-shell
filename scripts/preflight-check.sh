@@ -44,7 +44,7 @@ require_text '@installerArguments' install-windows.cmd
 require_text "[Guid]::NewGuid().ToString('N')" install-windows.cmd
 require_text "'Cache-Control'='no-cache'" install-windows.cmd
 require_text "Installer version: \$InstallerVersion" install-windows.ps1
-require_text '2026.09.09.2' install-windows.ps1
+require_text '2026.09.09.4' install-windows.ps1
 require_text '[switch]$CheckOnly' install-windows.ps1
 require_text 'Test-WindowsEnvironment' install-windows.ps1
 require_text 'Windows 11 detected' install-windows.ps1
@@ -104,6 +104,14 @@ require_text 'Test-OpenClawGatewayReady' install-windows.ps1
 require_text 'gateway status --deep --json' install-windows.ps1
 require_text 'Gateway 已启动并通过连接检查' install-windows.ps1
 require_text '计划任务可能立即退出' install-windows.ps1
+require_text 'Get-MissingGatewayLauncherEvidence' install-windows.ps1
+require_text "Get-ScheduledTask -TaskName 'OpenClaw Gateway'" install-windows.ps1
+require_text "Test-Path -LiteralPath \$gatewayCmdPath -PathType Leaf" install-windows.ps1
+require_text 'gateway.cmd 启动器已缺失' install-windows.ps1
+require_text 'openclaw gateway install --force 重建 Gateway' install-windows.ps1
+require_text 'Gateway 启动器已由官方命令重建' install-windows.ps1
+require_text "gateway\\.(?:cmd|vbs)" install-windows.ps1
+require_text '$launcherRepaired' install-windows.ps1
 require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path $stateRepairCompleted' install-windows.ps1
 require_text 'Inspect the existing service: openclaw gateway status --deep' install-windows.ps1
 require_text 'Temporary foreground Gateway: openclaw gateway run' install-windows.ps1

@@ -15,6 +15,12 @@ fail() {
 rg -Fq -- "Get-Command 'powershell.exe'" "$script" || fail "missing powershell.exe lookup"
 rg -Fq -- '-NoLogo -NoProfile -ExecutionPolicy Bypass -Command $isolatedCommand' "$script" || fail "Doctor is not launched in an isolated shell"
 rg -Fq -- 'The child inherits this console, so Doctor prompts remain interactive.' "$script" || fail "interactive child-console contract is missing"
+rg -Fq -- "Get-ScheduledTask -TaskName 'OpenClaw Gateway'" "$script" || fail "missing scheduled-task evidence check"
+rg -Fq -- "Test-Path -LiteralPath \$gatewayCmdPath -PathType Leaf" "$script" || fail "missing gateway.cmd existence check"
+rg -Fq -- 'gateway.cmd 启动器已缺失' "$script" || fail "missing missing-launcher diagnostic"
+rg -Fq -- 'gateway install --force' "$script" || fail "missing official launcher repair command"
+rg -Fq -- 'gateway\.(?:cmd|vbs)' "$script" || fail "missing vbs task-wrapper compatibility"
+rg -Fq -- '$launcherRepaired' "$script" || fail "missing duplicate-install guard"
 
 simulated_output=$'Gateway service ownership or shutdown could not be verified.\nSERVICE_DEFINITION_UNKNOWN'
 if ! printf '%s\n' "$simulated_output" | rg -q '(Gateway service ownership or shutdown could not be verified|SERVICE_DEFINITION_UNKNOWN)'; then

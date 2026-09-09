@@ -6,7 +6,7 @@
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.09.2'
+$InstallerVersion = '2026.09.09.4'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -685,9 +685,80 @@ function Test-OpenClawGatewayReady([string]$OpenClawPath) {
     return $false
 }
 
+function Get-MissingGatewayLauncherEvidence([string]$OpenClawPath) {
+    $gatewayCmdPath = Join-Path (Join-Path $HOME '.openclaw') 'gateway.cmd'
+    if (Test-Path -LiteralPath $gatewayCmdPath -PathType Leaf) { return $null }
+
+    $scheduledTaskCommand = Get-Command 'Get-ScheduledTask' -ErrorAction SilentlyContinue
+    if ($null -eq $scheduledTaskCommand) { return $null }
+
+    $task = $null
+    try { $task = Get-ScheduledTask -TaskName 'OpenClaw Gateway' -ErrorAction SilentlyContinue } catch {}
+    if ($null -eq $task) { return $null }
+
+    $taskActionText = @(
+        $task.Actions | ForEach-Object {
+            if ($null -ne $_.Execute) { $_.Execute }
+            if ($null -ne $_.Arguments) { $_.Arguments }
+        }
+    ) -join ' '
+    if ($taskActionText -notmatch '(?i)\\\.openclaw\\gateway\.(?:cmd|vbs)(?:\s|"|$)') { return $null }
+
+    $statusOutput = @()
+    $statusExitCode = 1
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $statusOutput = @(& $OpenClawPath gateway status --json 2>&1)
+        $statusExitCode = $LASTEXITCODE
+    } catch {} finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($statusExitCode -ne 0 -or $statusOutput.Count -eq 0) { return $null }
+
+    try {
+        $statusText = ($statusOutput | ForEach-Object { $_.ToString() }) -join "`n"
+        $status = $statusText | ConvertFrom-Json
+        $runtimeStatus = [string]$status.runtime.status
+        $serviceCommand = $status.service.command
+        if ($runtimeStatus -ne 'stopped' -or $null -ne $serviceCommand) { return $null }
+    } catch {
+        return $null
+    }
+
+    return [PSCustomObject]@{
+        GatewayCmdPath = $gatewayCmdPath
+        TaskName = 'OpenClaw Gateway'
+        RuntimeStatus = 'stopped'
+    }
+}
+
 function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath, [bool]$ForceReinstall = $false) {
     Write-Host ''
     Write-Host '第 3 步: 配置 Gateway' -ForegroundColor Cyan
+    $launcherRepaired = $false
+    if ($NeedsManualRepair) {
+        $missingLauncherEvidence = Get-MissingGatewayLauncherEvidence $OpenClawPath
+        if ($null -ne $missingLauncherEvidence) {
+            Write-Host '[WARN] 检测到 OpenClaw Gateway 计划任务仍存在，但其 gateway.cmd 启动器已缺失。' -ForegroundColor Yellow
+            Write-Host 'Gateway 当前已停止；将使用官方命令重新生成当前账号的服务启动器。' -ForegroundColor Yellow
+            if (Confirm-Choice '是否执行 openclaw gateway install --force 重建 Gateway？' $true) {
+                & $OpenClawPath gateway install --force
+                if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $missingLauncherEvidence.GatewayCmdPath -PathType Leaf)) {
+                    Write-Host 'Gateway 启动器已由官方命令重建。' -ForegroundColor Green
+                    $NeedsManualRepair = $false
+                    $launcherRepaired = $true
+                } else {
+                    Write-Host '[WARN] 官方 Gateway 重建未完成，保留现有计划任务和配置。' -ForegroundColor Yellow
+                    Write-Host '请在新的 PowerShell 中运行: openclaw gateway install --force' -ForegroundColor Cyan
+                    return
+                }
+            } else {
+                Write-Host '已跳过 Gateway 重建，保留现有计划任务和配置。' -ForegroundColor Yellow
+                return
+            }
+        }
+    }
     if ($NeedsManualRepair) {
         Write-Host '[WARN] 官方安装器未能确认现有 Gateway 服务的归属。' -ForegroundColor Yellow
         Write-Host '为避免覆盖其他服务，本次不会自动安装、停止或重启 Gateway。' -ForegroundColor Yellow
@@ -703,7 +774,7 @@ function Setup-Gateway([bool]$NeedsManualRepair = $false, [string]$OpenClawPath,
         return
     }
 
-    if (Confirm-Choice '是否安装 Gateway 系统服务并设置开机启动？' $true) {
+    if (-not $launcherRepaired -and (Confirm-Choice '是否安装 Gateway 系统服务并设置开机启动？' $true)) {
         $installArgs = @('gateway', 'install')
         if ($ForceReinstall) { $installArgs += '--force' }
         & $OpenClawPath @installArgs
