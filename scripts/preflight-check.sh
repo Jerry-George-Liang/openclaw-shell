@@ -15,7 +15,7 @@ require_text() {
     rg -Fq -- "$text" "$@" || fail "missing expected text: $text"
 }
 
-for script_file in install.sh config-menu.sh docker-entrypoint.sh scripts/preflight-check.sh; do
+for script_file in install.sh config-menu.sh docker-entrypoint.sh scripts/preflight-check.sh scripts/test-windows-doctor-call.sh; do
     bash -n "$script_file" || fail "shell syntax check failed: $script_file"
     if LC_ALL=C rg -q $'\r' "$script_file"; then
         fail "shell script contains CRLF bytes: $script_file"
@@ -44,6 +44,7 @@ require_text '@installerArguments' install-windows.cmd
 require_text "[Guid]::NewGuid().ToString('N')" install-windows.cmd
 require_text "'Cache-Control'='no-cache'" install-windows.cmd
 require_text "Installer version: \$InstallerVersion" install-windows.ps1
+require_text '2026.09.09.2' install-windows.ps1
 require_text '[switch]$CheckOnly' install-windows.ps1
 require_text 'Test-WindowsEnvironment' install-windows.ps1
 require_text 'Windows 11 detected' install-windows.ps1
@@ -92,6 +93,10 @@ require_text 'knownGatewayMigrationFailure' install-windows.ps1
 require_text '-NoOnboard 2>&1 6>&1' install-windows.ps1
 require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path' install-windows.ps1
 require_text 'Invoke-OpenClawStateRepair' install-windows.ps1
+require_text "Get-Command 'powershell.exe'" install-windows.ps1
+require_text '-NoLogo -NoProfile -ExecutionPolicy Bypass -Command' install-windows.ps1
+require_text 'The child inherits this console, so Doctor prompts remain interactive.' install-windows.ps1
+require_text '独立 PowerShell 仍无法确认 Gateway 服务归属或停止状态' install-windows.ps1
 require_text 'Left legacy agent dir at .*agent\.legacy-' install-windows.ps1
 require_text '状态迁移修复成功' install-windows.ps1
 require_text "\$installArgs += '--force'" install-windows.ps1
@@ -103,6 +108,7 @@ require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path $sta
 require_text 'Inspect the existing service: openclaw gateway status --deep' install-windows.ps1
 require_text 'Temporary foreground Gateway: openclaw gateway run' install-windows.ps1
 require_text 'bak-' install-windows.ps1
+bash scripts/test-windows-doctor-call.sh
 if rg -Fq -- '& openclaw onboard' install-windows.ps1; then
     fail "Windows installer still launches the official provider onboarding"
 fi
