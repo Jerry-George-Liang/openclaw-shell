@@ -45,7 +45,7 @@ require_text 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%
 require_text 'cachebust=%RANDOM%%RANDOM%' install-windows.cmd
 require_text "'Cache-Control'='no-cache'" install-windows.cmd
 require_text "Installer version: \$InstallerVersion" install-windows.ps1
-require_text '2026.09.09.8' install-windows.ps1
+require_text '2026.09.09.9' install-windows.ps1
 require_text 'curl.exe --fail --silent --show-error --location --retry 3' install-windows.cmd
 require_text '--connect-timeout 15 --max-time 120' install-windows.cmd
 require_text 'Invoke-RestMethod -Uri' install-windows.cmd
@@ -124,6 +124,10 @@ require_text 'Repair-MissingGatewayTask' install-windows.ps1
 require_text 'gateway-task-backup-' install-windows.ps1
 require_text '/Delete /TN $Evidence.TaskName /F' install-windows.ps1
 require_text '已备份残缺计划任务' install-windows.ps1
+require_text '[Console]::ReadKey($true)' install-windows.ps1
+require_text 'API Key input cancelled.' install-windows.ps1
+require_text '正在调用官方 Gateway 安装器，请等待完成' install-windows.ps1
+require_text '官方 Gateway 重建未完成（退出码:' install-windows.ps1
 require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path $stateRepairCompleted' install-windows.ps1
 require_text 'Inspect the existing service: openclaw gateway status --deep' install-windows.ps1
 require_text 'Temporary foreground Gateway: openclaw gateway run' install-windows.ps1

@@ -6,7 +6,7 @@
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.09.8'
+$InstallerVersion = '2026.09.09.9'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -140,12 +140,37 @@ function Confirm-Choice([string]$Prompt, [bool]$DefaultYes = $true) {
 }
 
 function Read-ApiKey([string]$Prompt) {
-    $secure = Read-Host $Prompt -AsSecureString
-    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    Write-Host "$Prompt " -NoNewline
+    $builder = New-Object System.Text.StringBuilder
     try {
-        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+        if ([Console]::IsInputRedirected) {
+            $secure = Read-Host -AsSecureString
+            $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+            try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
+            finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+        }
+
+        while ($true) {
+            $key = [Console]::ReadKey($true)
+            if ($key.Key -eq [ConsoleKey]::Enter) { break }
+            if ($key.Key -eq [ConsoleKey]::Backspace) {
+                if ($builder.Length -gt 0) {
+                    [void]$builder.Remove($builder.Length - 1, 1)
+                    Write-Host "`b `b" -NoNewline
+                }
+                continue
+            }
+            if ($key.Key -eq [ConsoleKey]::C -and ($key.Modifiers -band [ConsoleModifiers]::Control)) {
+                throw 'API Key input cancelled.'
+            }
+            if ([char]::IsControl($key.KeyChar)) { continue }
+            [void]$builder.Append($key.KeyChar)
+            Write-Host '*' -NoNewline
+        }
+        Write-Host ''
+        return $builder.ToString()
     } finally {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+        $builder.Clear() | Out-Null
     }
 }
 
@@ -777,13 +802,24 @@ function Repair-MissingGatewayTask([string]$OpenClawPath, $Evidence) {
         return $false
     }
 
-    & $OpenClawPath gateway install --force 2>&1 | ForEach-Object { Write-Host $_ }
-    if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $Evidence.GatewayCmdPath -PathType Leaf)) {
+    Write-Host '正在调用官方 Gateway 安装器，请等待完成...' -ForegroundColor Cyan
+    $installOutput = @()
+    & $OpenClawPath gateway install --force 2>&1 |
+        ForEach-Object {
+            $line = $_.ToString()
+            $installOutput += $line
+            Write-Host $line
+        }
+    $installExitCode = $LASTEXITCODE
+    if ($installExitCode -eq 0 -and (Test-Path -LiteralPath $Evidence.GatewayCmdPath -PathType Leaf)) {
         Write-Host '已删除残缺任务并由官方命令重建 Gateway 启动器。' -ForegroundColor Green
         return $true
     }
 
-    Write-Host '[WARN] 官方 Gateway 重建未完成；任务 XML 备份已保留。' -ForegroundColor Yellow
+    Write-Host "[WARN] 官方 Gateway 重建未完成（退出码: $installExitCode）；任务 XML 备份已保留。" -ForegroundColor Yellow
+    if ($installOutput.Count -gt 0) {
+        Write-Host (($installOutput | Select-Object -Last 3) -join "`n") -ForegroundColor Yellow
+    }
     Write-Host "如需恢复旧任务，可参考备份: $backupPath" -ForegroundColor Cyan
     return $false
 }
