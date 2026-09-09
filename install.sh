@@ -54,6 +54,8 @@ GITHUB_REPO="Jerry-George-Liang/openclaw-shell"
 GITHUB_RAW_URL="https://raw.githubusercontent.com/$GITHUB_REPO/main"
 INSTALL_MODE=""
 FORCE_REINSTALL="false"
+IS_WSL2="false"
+WSL_SYSTEMD_AVAILABLE="false"
 
 # Git Bash/Cygwin on Windows cannot provide a reliable native interactive
 # terminal for this Bash installer. Fail before any prompt is printed.
@@ -684,6 +686,15 @@ detect_os() {
             PACKAGE_MANAGER="yum"
         elif command -v pacman &> /dev/null; then
             PACKAGE_MANAGER="pacman"
+        fi
+        if grep -qiE '(microsoft|wsl)' /proc/sys/kernel/osrelease 2>/dev/null; then
+            IS_WSL2="true"
+            if [ "$(ps -p 1 -o comm= 2>/dev/null | tr -d '[:space:]')" = "systemd" ]; then
+                WSL_SYSTEMD_AVAILABLE="true"
+                log_info "检测到 WSL2（systemd 已启用）"
+            else
+                log_warn "检测到 WSL2，但 systemd 未启用；Gateway 将使用前台运行模式"
+            fi
         fi
         log_info "检测到 Linux 系统: $OS $OS_VERSION (包管理器: $PACKAGE_MANAGER)"
     elif [[ "$OSTYPE" == "darwin"* ]]; then
@@ -3396,6 +3407,11 @@ setup_identity() {
 # ================================ 服务管理 ================================
 
 setup_daemon() {
+    if [ "$IS_WSL2" = "true" ] && [ "$WSL_SYSTEMD_AVAILABLE" != "true" ]; then
+        log_warn "WSL2 未启用 systemd，跳过 Gateway 开机自启动配置"
+        echo "  启用 systemd 后重新运行，或使用: openclaw gateway run"
+        return 0
+    fi
     if confirm "是否设置开机自启动？" "y"; then
         log_step "使用 OpenClaw 官方命令配置系统服务..."
         if openclaw gateway install; then
@@ -3494,6 +3510,12 @@ start_openclaw_service() {
     if [ -f "$env_file" ]; then
         source "$env_file"
         log_info "已加载环境变量"
+    fi
+
+    if [ "$IS_WSL2" = "true" ] && [ "$WSL_SYSTEMD_AVAILABLE" != "true" ]; then
+        log_warn "WSL2 未启用 systemd，无法启动 Gateway 系统服务"
+        echo -e "${YELLOW}请在当前终端前台运行: source ~/.openclaw/env && openclaw gateway run${NC}"
+        return 0
     fi
     
     if openclaw health >/dev/null 2>&1; then

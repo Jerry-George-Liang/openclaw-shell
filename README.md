@@ -29,9 +29,9 @@
 
 | 项目 | 要求 |
 |------|------|
-| 操作系统 | macOS 12+（Intel/Apple Silicon）/ Ubuntu 20.04+ / Debian 11+ / CentOS 8+；Windows 建议 WSL2 |
+| 操作系统 | Windows 11（x64/ARM64，PowerShell 5.1+ 或 WSL2）/ macOS 12+（Intel/Apple Silicon）/ Ubuntu 20.04+ / Debian 11+ / CentOS 8+ |
 | CPU 架构 | 原生安装支持 x86_64/amd64、arm64/aarch64；Docker 使用对应的 multi-arch Node 基础镜像 |
-| Node.js | 新安装固定 Node.js 22 LTS（最低 22.22.3）；已有 22.22.3+、24.15.0+、25.9.0+ 或 26+ 可继续使用（不支持 Node 23） |
+| Node.js | Windows 由 OpenClaw 官方安装器检测并安装受支持版本；macOS/Linux 新安装固定 Node.js 22 LTS（最低 22.22.3）；Docker 随固定 OpenClaw 版本使用 Node.js 22 |
 | 内存 | 最低 2GB，推荐 4GB+ |
 | 磁盘空间 | 最低 1GB |
 
@@ -67,6 +67,22 @@ curl -fsSL https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/m
 $u='https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust='+[guid]::NewGuid().ToString('N'); irm $u | iex
 ```
 
+从仓库运行前可先做 Win11 环境预检；它只检查 Windows 版本、CPU 架构和 PowerShell 版本，不安装软件、不修改 OpenClaw 配置。脚本文件带 UTF-8 BOM，可直接在 Windows PowerShell 5.1 本地执行，避免中文提示按系统 ANSI 解码：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install-windows.ps1 -CheckOnly
+```
+
+脚本会明确显示 Windows 11 build 与 x64/ARM64 架构。低于 Windows 11 build 22000 时仅以兼容模式继续，不作为已验证环境。
+
+| 能力 | Win11 原生 PowerShell | Win11 + WSL2 |
+|------|-----------------------|--------------|
+| OpenClaw 安装/升级 | ✅ | ✅ |
+| Tuzi/GAC 模型配置与连接测试 | ✅ | ✅ |
+| Gateway 后台服务 | ✅（Windows 计划任务） | ✅（需启用 systemd） |
+| 完整交互式渠道配置菜单 | 使用官方渠道命令 | ✅ |
+| Docker Desktop 部署 | ✅ | ✅ |
+
 如果当前已经打开的是 `cmd.exe`，直接执行下面两行即可，脚本会自动切换到 PowerShell：
 
 ```bat
@@ -92,9 +108,13 @@ Windows 原生流程与 macOS/Linux 的核心结果保持一致：
 5. 可选执行隔离的 `openclaw agent exec` 测试，不写入 `session main`
 6. 可选安装 Gateway 系统服务并立即启动
 
+当前终端能找到 `openclaw` 时，脚本会在写入后执行官方配置校验；若校验失败则自动恢复原配置，避免 CLI 版本变化留下不可用配置。
+
 如果 Windows PowerShell 获取模型列表时出现 TLS/连接关闭错误，脚本会自动改用已安装的 Node.js 兼容通道重试；两条通道都不可用时才提示手动输入模型名称。
 
 Windows 下启动：`openclaw gateway start`；打开持续会话界面：`openclaw tui`。Windows 原生脚本暂不包含 Bash 的完整渠道配置菜单；如需该菜单请使用 WSL2，或安装后使用 OpenClaw 官方渠道命令配置。
+
+在 WSL2 中使用 Bash 安装器前，先确认 `ps -p 1 -o comm=` 输出 `systemd`。若不是，请在 `/etc/wsl.conf` 启用 systemd 后从 Windows 执行 `wsl --shutdown`；否则 Gateway 系统服务无法开机启动，可暂时使用 `openclaw gateway run` 前台运行。
 
 如果升级已有安装时出现 `SERVICE_DEFINITION_UNKNOWN`，或提示 `Gateway service ownership or shutdown could not be verified`，表示官方安装器无法安全确认旧 Gateway 服务由谁创建。新版包装脚本会在确认 `openclaw` 命令可用后继续完成 Tuzi 配置，但不会强制覆盖、停止或重启归属不明的服务。请先运行：
 
@@ -487,9 +507,16 @@ export OPENCLAW_GATEWAY_TOKEN="$(openssl rand -hex 32)"
 docker compose up -d --build
 ```
 
+Windows PowerShell 使用：
+
+```powershell
+$env:OPENCLAW_GATEWAY_TOKEN = [Guid]::NewGuid().ToString('N') + [Guid]::NewGuid().ToString('N')
+docker compose up -d --build
+```
+
 如需让局域网设备访问，需明确修改 `docker-compose.yml` 的端口映射；不得移除 Gateway Token。
 
-> Linux 使用绑定目录时，容器以非 root 的 `node` 用户（UID 1000）运行。首次启动前请执行 `mkdir -p ~/.openclaw`；若宿主用户不是 UID 1000，请执行 `sudo chown -R 1000:1000 ~/.openclaw`，或将 Compose 的绑定目录改为 Docker named volume。macOS/Windows Docker Desktop 通常由文件共享层处理权限，但仍需在 Docker Desktop 中允许工作目录访问。
+> Linux 使用绑定目录时，容器以非 root 的 `node` 用户（UID 1000）运行。首次启动前请执行 `mkdir -p ~/.openclaw`；若宿主用户不是 UID 1000，请执行 `sudo chown -R 1000:1000 ~/.openclaw`，或将 Compose 的绑定目录改为 Docker named volume。macOS/Windows Docker Desktop 通常由文件共享层处理权限，但仍需在 Docker Desktop 中允许工作目录访问。仓库已强制所有容器 Shell 脚本使用 LF，避免 Windows Git 的 CRLF 转换破坏容器入口。
 
 ### 权限控制
 

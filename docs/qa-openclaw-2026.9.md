@@ -1,6 +1,6 @@
 # OpenClaw 2026.9.2 Compatibility QA
 
-Date: 2026-09-08
+Date: 2026-09-09
 
 ## Scope
 
@@ -43,6 +43,12 @@ Date: 2026-09-08
 | Windows legacy-agent migration recovery | After an ownership warning, retries Doctor once only when the first run left `agent.legacy-*`; on success uses official `gateway install --force`, otherwise preserves the service and backup | Passed by static review; Windows runtime pending |
 | Windows Gateway post-start verification | Polls `gateway status --deep --json` and reports success only when the managed runtime is running and RPC connectivity succeeds | Passed by parser and simulated status checks; Windows runtime pending |
 | Windows post-install PATH refresh | Searches the current command, npm prefix, `%APPDATA%\npm`, and `%USERPROFILE%\.local\bin`; Tuzi JSON configuration continues when the new shim needs a fresh terminal | Passed by static review |
+| Windows 11 environment preflight | `-CheckOnly` validates native Windows, PowerShell 5.1+, x64/ARM64 and reports the Windows build without installing or changing configuration | Passed by static review; Windows runtime pending |
+| Windows checkout line endings | Shell scripts and Dockerfile are pinned to LF so Docker Desktop does not execute a `/bin/bash\r` shebang after a Windows Git checkout | Passed by attributes and CR-byte preflight |
+| Windows skip-install behavior | `-SkipOfficialInstall` fails instead of reporting success when no runnable OpenClaw command exists | Passed by static review; Windows runtime pending |
+| Windows post-write validation | Runs the installed CLI config validator and restores the timestamped backup (or removes a new invalid config) on failure | Passed by static review; Windows runtime pending |
+| Windows CMD argument forwarding | CMD forwards switch arguments such as `-CheckOnly` to the downloaded PowerShell installer without evaluating them as commands | Passed by static review; Windows runtime pending |
+| WSL2 service fallback | Detects WSL2 without systemd, skips unsupported service installation/start and points to foreground `gateway run` | Passed by static review; WSL2 runtime pending |
 | PowerShell parser | PowerShell 7.4 parses `install-windows.ps1` without syntax errors | Passed in a read-only Linux PowerShell container |
 | Windows embedded config writer | Fake-key writes produce the expected Claude-Code, Codex, and dual GAC providers | Passed in three isolated temporary directories |
 | New Node.js installation line | Installs Node.js 22 LTS on Homebrew/NodeSource while retaining supported newer existing versions | Passed by static review |
