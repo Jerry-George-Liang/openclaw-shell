@@ -21,6 +21,9 @@ rg -Fq -- 'gateway.cmd 启动器已缺失' "$script" || fail "missing missing-la
 rg -Fq -- 'gateway install --force' "$script" || fail "missing official launcher repair command"
 rg -Fq -- 'gateway\.(?:cmd|vbs)' "$script" || fail "missing vbs task-wrapper compatibility"
 rg -Fq -- '$launcherRepaired' "$script" || fail "missing duplicate-install guard"
+rg -Fq -- "Get-Command 'schtasks.exe'" "$script" || fail "missing schtasks fallback"
+rg -Fq -- "schtasks.exe /Query /TN 'OpenClaw Gateway' /FO LIST /V" "$script" || fail "missing task action fallback"
+rg -Fq -- '$runtimeNode = $status.service.runtime' "$script" || fail "missing nested runtime status compatibility"
 
 launcher="$repo_root/install-windows.cmd"
 rg -Fq -- 'curl.exe --fail --silent --show-error --location --retry 3' "$launcher" || fail "CMD launcher does not use curl retry path"

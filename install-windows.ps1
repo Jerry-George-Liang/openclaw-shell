@@ -6,7 +6,7 @@
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.09.6'
+$InstallerVersion = '2026.09.09.7'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -690,17 +690,27 @@ function Get-MissingGatewayLauncherEvidence([string]$OpenClawPath) {
     if (Test-Path -LiteralPath $gatewayCmdPath -PathType Leaf) { return $null }
 
     $task = $null
+    $taskActionText = ''
     if ($null -ne (Get-Command 'Get-ScheduledTask' -ErrorAction SilentlyContinue)) {
         try { $task = Get-ScheduledTask -TaskName 'OpenClaw Gateway' -ErrorAction SilentlyContinue } catch {}
     }
-    if ($null -eq $task) { return $null }
-
-    $taskActionText = @(
-        $task.Actions | ForEach-Object {
-            if ($null -ne $_.Execute) { $_.Execute }
-            if ($null -ne $_.Arguments) { $_.Arguments }
-        }
-    ) -join ' '
+    if ($null -ne $task) {
+        $taskActionText = @(
+            $task.Actions | ForEach-Object {
+                if ($null -ne $_.Execute) { $_.Execute }
+                if ($null -ne $_.Arguments) { $_.Arguments }
+            }
+        ) -join ' '
+    }
+    if ([string]::IsNullOrWhiteSpace($taskActionText) -and $null -ne (Get-Command 'schtasks.exe' -ErrorAction SilentlyContinue)) {
+        try {
+            $taskQuery = @(& schtasks.exe /Query /TN 'OpenClaw Gateway' /FO LIST /V 2>$null)
+            if ($LASTEXITCODE -eq 0) {
+                $taskActionText = ($taskQuery | ForEach-Object { $_.ToString() }) -join ' '
+            }
+        } catch {}
+    }
+    if ([string]::IsNullOrWhiteSpace($taskActionText)) { return $null }
     if ($taskActionText -notmatch '(?i)gateway\.(?:cmd|vbs)') { return $null }
 
     $statusOutput = @()
@@ -718,9 +728,11 @@ function Get-MissingGatewayLauncherEvidence([string]$OpenClawPath) {
     try {
         $statusText = ($statusOutput | ForEach-Object { $_.ToString() }) -join "`n"
         $status = $statusText | ConvertFrom-Json
-        $runtimeStatus = [string]$status.runtime.status
+        $runtimeNode = $status.runtime
+        if ($null -eq $runtimeNode) { $runtimeNode = $status.service.runtime }
+        $runtimeStatus = [string]$runtimeNode.status
         $serviceCommand = $status.service.command
-        if ($runtimeStatus -ne 'stopped' -or $null -ne $serviceCommand) { return $null }
+        if ($runtimeStatus -ne 'stopped' -or -not [string]::IsNullOrWhiteSpace([string]$serviceCommand)) { return $null }
     } catch {
         return $null
     }
