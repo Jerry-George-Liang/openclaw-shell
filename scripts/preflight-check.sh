@@ -45,7 +45,7 @@ require_text 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%
 require_text 'cachebust=%RANDOM%%RANDOM%' install-windows.cmd
 require_text "'Cache-Control'='no-cache'" install-windows.cmd
 require_text "Installer version: \$InstallerVersion" install-windows.ps1
-require_text '2026.09.09.5' install-windows.ps1
+require_text '2026.09.09.6' install-windows.ps1
 require_text 'curl.exe --fail --silent --show-error --location --retry 3' install-windows.cmd
 require_text '--connect-timeout 15 --max-time 120' install-windows.cmd
 require_text 'Invoke-RestMethod -Uri' install-windows.cmd
@@ -115,6 +115,7 @@ require_text 'gateway.cmd 启动器已缺失' install-windows.ps1
 require_text 'openclaw gateway install --force 重建 Gateway' install-windows.ps1
 require_text 'Gateway 启动器已由官方命令重建' install-windows.ps1
 require_text "gateway\\.(?:cmd|vbs)" install-windows.ps1
+require_text "if (\$null -ne (Get-Command 'Get-ScheduledTask'" install-windows.ps1
 require_text '$launcherRepaired' install-windows.ps1
 require_text 'Setup-Gateway $officialInstallerWarning $openclawRuntime.Path $stateRepairCompleted' install-windows.ps1
 require_text 'Inspect the existing service: openclaw gateway status --deep' install-windows.ps1
