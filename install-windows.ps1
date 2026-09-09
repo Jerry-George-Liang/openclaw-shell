@@ -6,7 +6,7 @@
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.09.5'
+$InstallerVersion = '2026.09.09.6'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -689,11 +689,10 @@ function Get-MissingGatewayLauncherEvidence([string]$OpenClawPath) {
     $gatewayCmdPath = Join-Path (Join-Path $HOME '.openclaw') 'gateway.cmd'
     if (Test-Path -LiteralPath $gatewayCmdPath -PathType Leaf) { return $null }
 
-    $scheduledTaskCommand = Get-Command 'Get-ScheduledTask' -ErrorAction SilentlyContinue
-    if ($null -eq $scheduledTaskCommand) { return $null }
-
     $task = $null
-    try { $task = Get-ScheduledTask -TaskName 'OpenClaw Gateway' -ErrorAction SilentlyContinue } catch {}
+    if ($null -ne (Get-Command 'Get-ScheduledTask' -ErrorAction SilentlyContinue)) {
+        try { $task = Get-ScheduledTask -TaskName 'OpenClaw Gateway' -ErrorAction SilentlyContinue } catch {}
+    }
     if ($null -eq $task) { return $null }
 
     $taskActionText = @(
@@ -702,7 +701,7 @@ function Get-MissingGatewayLauncherEvidence([string]$OpenClawPath) {
             if ($null -ne $_.Arguments) { $_.Arguments }
         }
     ) -join ' '
-    if ($taskActionText -notmatch '(?i)\\\.openclaw\\gateway\.(?:cmd|vbs)(?:\s|"|$)') { return $null }
+    if ($taskActionText -notmatch '(?i)gateway\.(?:cmd|vbs)') { return $null }
 
     $statusOutput = @()
     $statusExitCode = 1
