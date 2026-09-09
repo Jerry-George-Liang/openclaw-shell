@@ -1,11 +1,12 @@
-param(
+﻿param(
     [switch]$SkipOfficialInstall,
     [switch]$NoOnboard,
-    [switch]$SkipTuziConfig
+    [switch]$SkipTuziConfig,
+    [switch]$CheckOnly
 )
 
 $ErrorActionPreference = 'Stop'
-$InstallerVersion = '2026.09.08.9'
+$InstallerVersion = '2026.09.09.1'
 
 # Keep Chinese and interactive prompts readable in Windows PowerShell 5.1.
 try { chcp 65001 | Out-Null } catch {}
@@ -28,6 +29,45 @@ function Fail([string]$Message) {
 function Require-Command([string]$Name) {
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
         Fail "Required command not found: $Name"
+    }
+}
+
+function Get-WindowsBuildNumber {
+    try {
+        $currentVersion = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+        return [int]$currentVersion.CurrentBuildNumber
+    } catch {
+        return [Environment]::OSVersion.Version.Build
+    }
+}
+
+function Test-WindowsEnvironment {
+    if ($env:OS -ne 'Windows_NT') {
+        Fail 'This installer only supports native Windows. On macOS/Linux use install.sh.'
+    }
+
+    try {
+        $architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+    } catch {
+        $architecture = $env:PROCESSOR_ARCHITECTURE
+    }
+    if ($architecture -notmatch '^(X64|Arm64|AMD64|ARM64)$') {
+        Fail "Unsupported Windows architecture: $architecture. Windows 11 x64 or ARM64 is required."
+    }
+
+    $build = Get-WindowsBuildNumber
+    if ($build -ge 22000) {
+        Write-Host "Windows 11 detected (build $build, $architecture)." -ForegroundColor Green
+    } elseif ($build -gt 0) {
+        Write-Host "[WARN] Windows build $build is not Windows 11; continuing in compatibility mode." -ForegroundColor Yellow
+    } else {
+        Write-Host '[WARN] Unable to determine the Windows build number.' -ForegroundColor Yellow
+    }
+
+    return [PSCustomObject]@{
+        Build = $build
+        Architecture = $architecture
+        IsWindows11 = ($build -ge 22000)
     }
 }
 
@@ -439,6 +479,7 @@ function Configure-Tuzi {
     return [PSCustomObject]@{
         Group = $group
         ConfigPath = $writeResult.ConfigPath
+        BackupPath = $writeResult.BackupPath
         Primary = $primary
     }
 }
@@ -528,6 +569,33 @@ function Test-TuziConnection([string]$ConfigPath, [string]$OpenClawPath) {
         Write-Host '[WARN] AI 测试失败，但已保存的配置未删除。上游过载时可稍后重试。' -ForegroundColor Yellow
         Write-Host "重试命令: openclaw agent exec --config `"$ConfigPath`" --timeout 25 '回复 OK'" -ForegroundColor DarkGray
     }
+}
+
+function Test-OpenClawConfig($TuziResult, [string]$OpenClawPath) {
+    if ([string]::IsNullOrWhiteSpace($OpenClawPath)) { return }
+
+    Write-Host '正在校验 OpenClaw 配置...' -ForegroundColor Cyan
+    $validateExitCode = 1
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $OpenClawPath config validate 2>&1 |
+            ForEach-Object { Write-Host $_.ToString() }
+        $validateExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($validateExitCode -eq 0) {
+        Write-Host 'OpenClaw 配置校验通过。' -ForegroundColor Green
+        return
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($TuziResult.BackupPath) -and (Test-Path -LiteralPath $TuziResult.BackupPath)) {
+        Copy-Item -LiteralPath $TuziResult.BackupPath -Destination $TuziResult.ConfigPath -Force
+        Fail "OpenClaw 配置校验失败，已恢复原配置: $($TuziResult.BackupPath)"
+    }
+    Remove-Item -LiteralPath $TuziResult.ConfigPath -Force -ErrorAction SilentlyContinue
+    Fail 'OpenClaw 配置校验失败，已移除本次新建的无效配置。'
 }
 
 function Invoke-OpenClawStateRepair([string]$OpenClawPath) {
@@ -648,8 +716,20 @@ Write-Host "Installer version: $InstallerVersion" -ForegroundColor DarkGray
 Write-Host 'This is the native PowerShell entry point. Do not run install.sh from cmd.exe or Git Bash.'
 Write-Host ''
 
-if ($PSVersionTable.PSVersion.Major -lt 5) {
+if (
+    $PSVersionTable.PSVersion.Major -lt 5 -or
+    ($PSVersionTable.PSVersion.Major -eq 5 -and $PSVersionTable.PSVersion.Minor -lt 1)
+) {
     Fail 'PowerShell 5.1 or newer is required.'
+}
+
+$windowsEnvironment = Test-WindowsEnvironment
+if ($CheckOnly) {
+    if (-not $windowsEnvironment.IsWindows11) {
+        Fail "Win11 preflight failed: Windows build 22000 or newer is required; detected $($windowsEnvironment.Build)."
+    }
+    Write-Host "Win11 preflight passed: PowerShell $($PSVersionTable.PSVersion), build $($windowsEnvironment.Build), $($windowsEnvironment.Architecture)." -ForegroundColor Green
+    exit 0
 }
 
 $officialInstallerWarning = $false
@@ -690,6 +770,8 @@ Require-Command 'node'
 $openclawRuntime = Resolve-OpenClawRuntime
 if ($null -ne $openclawRuntime) {
     Write-Host "OpenClaw detected: $($openclawRuntime.Version)" -ForegroundColor Green
+} elseif ($SkipOfficialInstall) {
+    Fail '-SkipOfficialInstall requires an existing runnable openclaw command. Reopen PowerShell or run without this option.'
 } else {
     Write-Host '[WARN] OpenClaw 已安装，但当前终端尚未找到可运行的命令。' -ForegroundColor Yellow
     Write-Host '[WARN] Tuzi 配置仍将完成；安装结束后请重新打开 PowerShell。' -ForegroundColor Yellow
@@ -701,6 +783,7 @@ if ($NoOnboard) {
 
 if (-not $SkipTuziConfig) {
     $tuzi = Configure-Tuzi
+    Test-OpenClawConfig $tuzi $openclawRuntime.Path
     Test-TuziConnection $tuzi.ConfigPath $openclawRuntime.Path
 }
 
@@ -717,6 +800,9 @@ if ($officialInstallerWarning) {
     Write-Host 'OpenClaw and Tuzi setup complete with a Gateway service warning.' -ForegroundColor Yellow
     Write-Host 'Inspect the existing service: openclaw gateway status --deep'
     Write-Host 'Temporary foreground Gateway: openclaw gateway run'
+} elseif ($null -eq $openclawRuntime) {
+    Write-Host 'The official installer finished, but openclaw is not available in this PowerShell session yet.' -ForegroundColor Yellow
+    Write-Host 'Reopen PowerShell, then run: openclaw --version; openclaw doctor'
 } else {
     Write-Host 'Installation complete.' -ForegroundColor Green
     Write-Host 'Start the Gateway: openclaw gateway start'

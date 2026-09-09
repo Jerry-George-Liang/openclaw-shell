@@ -11,8 +11,9 @@ if errorlevel 1 (
 )
 
 echo Starting OpenClaw Windows installer...
+set "OPENCLAW_INSTALLER_ARGUMENTS=%*"
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ErrorActionPreference = 'Stop'; $url = 'https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust=' + [Guid]::NewGuid().ToString('N'); $script = Invoke-RestMethod -Uri $url -Headers @{'Cache-Control'='no-cache'}; & ([scriptblock]::Create([string]$script))"
+  "$ErrorActionPreference = 'Stop'; $url = 'https://raw.githubusercontent.com/Jerry-George-Liang/openclaw-shell/main/install-windows.ps1?cachebust=' + [Guid]::NewGuid().ToString('N'); $script = Invoke-RestMethod -Uri $url -Headers @{'Cache-Control'='no-cache'}; $argumentLine = [Environment]::GetEnvironmentVariable('OPENCLAW_INSTALLER_ARGUMENTS'); $installerArguments = @($argumentLine -split '\s+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }); & ([scriptblock]::Create([string]$script)) @installerArguments"
 if errorlevel 1 (
   echo [ERROR] OpenClaw Windows installer failed.
   exit /b 1

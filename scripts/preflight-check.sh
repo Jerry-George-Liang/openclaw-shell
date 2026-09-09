@@ -17,16 +17,43 @@ require_text() {
 
 for script_file in install.sh config-menu.sh docker-entrypoint.sh scripts/preflight-check.sh; do
     bash -n "$script_file" || fail "shell syntax check failed: $script_file"
+    if LC_ALL=C rg -q $'\r' "$script_file"; then
+        fail "shell script contains CRLF bytes: $script_file"
+    fi
+done
+
+for docker_file in Dockerfile; do
+    if LC_ALL=C rg -q $'\r' "$docker_file"; then
+        fail "Docker file contains CRLF bytes: $docker_file"
+    fi
+done
+
+for shell_pattern in '*.sh text eol=lf' 'Dockerfile text eol=lf'; do
+    require_text "$shell_pattern" .gitattributes
 done
 
 test -f install-windows.ps1 || fail "missing native Windows installer"
 test -f install-windows.cmd || fail "missing cmd.exe Windows launcher"
+ps1_bom="$(od -An -tx1 -N3 install-windows.ps1 | tr -d '[:space:]')"
+[ "$ps1_bom" = "efbbbf" ] || fail "Windows PowerShell installer must be UTF-8 BOM encoded"
 rg -Fq -- "openclaw.ai/install.ps1" install-windows.ps1 || fail "Windows installer does not use official installer"
 rg -Fq -- "Do not run install.sh from cmd.exe or Git Bash" install-windows.ps1 || fail "Windows terminal guidance is missing"
 rg -Fq -- "Invoke-RestMethod" install-windows.cmd || fail "cmd.exe launcher does not delegate to PowerShell"
+require_text 'OPENCLAW_INSTALLER_ARGUMENTS=%*' install-windows.cmd
+require_text '@installerArguments' install-windows.cmd
 require_text "[Guid]::NewGuid().ToString('N')" install-windows.cmd
 require_text "'Cache-Control'='no-cache'" install-windows.cmd
 require_text "Installer version: \$InstallerVersion" install-windows.ps1
+require_text '[switch]$CheckOnly' install-windows.ps1
+require_text 'Test-WindowsEnvironment' install-windows.ps1
+require_text 'Windows 11 detected' install-windows.ps1
+require_text 'Win11 preflight passed' install-windows.ps1
+require_text 'Win11 preflight failed' install-windows.ps1
+require_text "PSVersionTable.PSVersion.Minor -lt 1" install-windows.ps1
+require_text "-SkipOfficialInstall requires an existing runnable openclaw command" install-windows.ps1
+require_text 'Test-OpenClawConfig' install-windows.ps1
+require_text 'config validate' install-windows.ps1
+require_text '配置校验失败，已恢复原配置' install-windows.ps1
 require_text 'install-windows.ps1?cachebust=' install-windows.ps1
 require_text 'Configure-Tuzi' install-windows.ps1
 require_text 'https://api.tu-zi.com/v1/models' install-windows.ps1
@@ -113,6 +140,8 @@ require_text '/home/node/.openclaw' Dockerfile docker-entrypoint.sh docker-compo
 require_text '只更新当前提供商变量' config-menu.sh
 require_text 'gateway.auth.mode' install.sh config-menu.sh
 require_text 'Windows 请在 PowerShell' install.sh
+require_text '检测到 WSL2，但 systemd 未启用' install.sh
+require_text 'WSL2 未启用 systemd，跳过 Gateway 开机自启动配置' install.sh
 require_text 'NODE_INSTALL_MAJOR="22"' install.sh
 require_text 'setup_${NODE_INSTALL_MAJOR}.x' install.sh
 require_text 'node@22' install.sh
